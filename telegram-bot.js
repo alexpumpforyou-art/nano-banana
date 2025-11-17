@@ -267,7 +267,7 @@ bot.onText(/\/history/, async (msg) => {
     let text = '📝 Последние генерации:\n\n';
     history.forEach((gen, idx) => {
       text += `${idx + 1}. "${gen.prompt.substring(0, 50)}..."\n`;
-      text += `   Токенов: ${gen.tokens_used}\n`;
+      text += `   Кредитов: ${gen.credits_used}\n`;
       text += `   Время: ${new Date(gen.created_at).toLocaleString('ru-RU')}\n\n`;
     });
 
@@ -335,7 +335,7 @@ bot.onText(/\/stats/, async (msg) => {
     
     // Общая статистика генераций
     const totalGenerations = db.db.prepare(`
-      SELECT COUNT(*) as count, SUM(tokens_used) as total_tokens 
+      SELECT COUNT(*) as count, SUM(credits_used) as total_credits 
       FROM generations
     `).get();
     
@@ -375,7 +375,7 @@ bot.onText(/\/stats/, async (msg) => {
     
     statsText += `🤖 *Генерации:*\n`;
     statsText += `└ Всего: ${totalGenerations.count || 0}\n`;
-    statsText += `└ Использовано токенов: ${(totalGenerations.total_tokens || 0).toLocaleString('ru-RU')}\n`;
+    statsText += `└ Использовано кредитов: ${(totalGenerations.total_credits || 0).toLocaleString('ru-RU')}\n`;
     statsText += `└ За 24 часа: ${recentGens.count || 0}\n\n`;
     
     if (topBuyers.length > 0) {
@@ -388,7 +388,7 @@ bot.onText(/\/stats/, async (msg) => {
     
     // Расчет примерного дохода
     const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01; // $0.01 за Star
-    const estimatedCost = ((totalGenerations.total_tokens || 0) / 1000000) * 0.15; // примерная стоимость API
+    const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15; // кредиты * 50 = токены, примерная стоимость API
     const estimatedProfit = estimatedRevenue - estimatedCost;
     
     statsText += `💵 *Финансы (приблизительно):*\n`;
@@ -397,8 +397,8 @@ bot.onText(/\/stats/, async (msg) => {
     statsText += `└ Прибыль: $${estimatedProfit.toFixed(2)}\n\n`;
     
     statsText += `⚙️ *Настройки:*\n`;
-    statsText += `└ Токенов за Star: ${TOKENS_PER_STAR}\n`;
-    statsText += `└ Бесплатных токенов: ${FREE_TOKENS}\n`;
+    statsText += `└ Кредитов за Star: ${CREDITS_PER_STAR}\n`;
+    statsText += `└ Бесплатных кредитов: ${FREE_CREDITS}\n`;
     
     await bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
     
