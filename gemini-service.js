@@ -3,10 +3,19 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class GeminiService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Используем gemini-1.5-flash - стабильная модель с хорошей бесплатной квотой
-    // 15 запросов в минуту, 1 миллион токенов в день бесплатно
+    this.apiKey = apiKey;
+    // Список моделей для автоматического перебора
+    this.modelsToTry = [
+      'gemini-1.5-pro',
+      'gemini-1.5-flash-8b',
+      'gemini-1.0-pro',
+      'gemini-pro',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash'
+    ];
+    this.currentModelIndex = 0;
     this.model = this.genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash'
+      model: this.modelsToTry[this.currentModelIndex]
     });
   }
 
@@ -16,23 +25,43 @@ class GeminiService {
    * @returns {Promise<{text: string, tokensUsed: number}>}
    */
   async generate(prompt) {
-    try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Примерный подсчет токенов (4 символа ≈ 1 токен)
-      const tokensUsed = Math.ceil((prompt.length + text.length) / 4);
+    // Пробуем текущую модель
+    for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
+      try {
+        const result = await this.model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        
+        // Примерный подсчет токенов (4 символа ≈ 1 токен)
+        const tokensUsed = Math.ceil((prompt.length + text.length) / 4);
 
-      return {
-        text,
-        tokensUsed,
-        success: true
-      };
-    } catch (error) {
-      console.error('❌ Ошибка Gemini API:', error.message);
-      throw new Error('Не удалось сгенерировать ответ: ' + error.message);
+        console.log(`✅ Успешная генерация с моделью: ${this.modelsToTry[this.currentModelIndex]}`);
+        return {
+          text,
+          tokensUsed,
+          success: true
+        };
+      } catch (error) {
+        console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не работает:`, error.message);
+        
+        // Если модель не найдена или квота исчерпана, пробуем следующую
+        if (error.message.includes('404') || error.message.includes('429') || error.message.includes('quota')) {
+          this.currentModelIndex++;
+          if (this.currentModelIndex < this.modelsToTry.length) {
+            console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+            this.model = this.genAI.getGenerativeModel({ 
+              model: this.modelsToTry[this.currentModelIndex]
+            });
+            continue; // Пробуем следующую модель
+          }
+        }
+        
+        // Если перепробовали все модели или другая ошибка
+        throw new Error('Не удалось сгенерировать ответ: ' + error.message);
+      }
     }
+    
+    throw new Error('Ни одна модель Gemini не доступна для вашего API ключа');
   }
 
   /**
