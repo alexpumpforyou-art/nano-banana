@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍌 Nano Banana - Gemini AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🍌 Nano Banana</h1>
+            <p class="subtitle">Генерация текста с помощью Google Gemini AI</p>
+            <div class="balance">
+                <span class="balance-label">Токенов:</span>
+                <span class="balance-value" id="balance">-</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <h2>👋 Привет!</h2>
+                        <p>Я помогу вам генерировать текст с помощью Google Gemini AI.</p>
+                        <p>Просто введите ваш запрос ниже и нажмите "Генерировать".</p>
+                        <div class="info-box">
+                            <p>💎 У вас <strong id="welcome-balance">100</strong> бесплатных токенов!</p>
+                            <p>📱 Хотите больше токенов? Используйте наш <a href="#telegram-info">Telegram бот</a>!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <textarea 
+                        id="prompt" 
+                        placeholder="Введите ваш запрос здесь..."
+                        rows="3"
+                    ></textarea>
+                    <button id="generateBtn" class="btn-primary">
+                        <span class="btn-text">Генерировать</span>
+                        <span class="btn-icon">✨</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="card">
+                    <h3>📊 Статистика</h3>
+                    <div class="stat-item">
+                        <span>Всего генераций:</span>
+                        <strong id="total-generations">0</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>Токенов использовано:</span>
+                        <strong id="tokens-used">0</strong>
+                    </div>
+                </div>
+
+                <div class="card" id="telegram-info">
+                    <h3>🤖 Telegram Бот</h3>
+                    <p>Используйте нашего Telegram бота для:</p>
+                    <ul>
+                        <li>⭐ Покупки токенов за Stars</li>
+                        <li>📱 Генерации в мессенджере</li>
+                        <li>📊 Просмотра истории</li>
+                    </ul>
+                    <a href="https://t.me/YOUR_BOT_USERNAME" class="btn-telegram" target="_blank">
+                        Открыть бота
+                    </a>
+                    <p class="hint">Замените YOUR_BOT_USERNAME на имя вашего бота</p>
+                </div>
+
+                <div class="card">
+                    <h3>💡 Примеры запросов</h3>
+                    <div class="examples">
+                        <button class="example-btn" data-prompt="Напиши короткий рассказ про банан">
+                            📝 Рассказ про банан
+                        </button>
+                        <button class="example-btn" data-prompt="Объясни квантовую физику простыми словами">
+                            🔬 Квантовая физика
+                        </button>
+                        <button class="example-btn" data-prompt="Придумай название для стартапа">
+                            💡 Название стартапа
+                        </button>
+                        <button class="example-btn" data-prompt="Напиши мотивирующее сообщение на день">
+                            ⭐ Мотивация
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Google Gemini AI | Made with ❤️</p>
+        </footer>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Генерирую ответ...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

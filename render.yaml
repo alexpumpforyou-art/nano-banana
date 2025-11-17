@@ -1,0 +1,22 @@
+# Конфигурация для автоматического деплоя на Render.com
+services:
+  - type: web
+    name: nano-banana
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: FREE_TOKENS
+        value: 100
+      - key: TOKENS_PER_STAR
+        value: 1000
+      # Эти переменные нужно добавить вручную в Dashboard:
+      # - TELEGRAM_BOT_TOKEN
+      # - GEMINI_API_KEY
+
