@@ -263,7 +263,94 @@ bot.on('message', async (msg) => {
   if (msg.successful_payment) return;
 
   const chatId = msg.chat.id;
-  const prompt = msg.text;
+  const prompt = msg.text || msg.caption || '';
+
+  // Проверяем есть ли фото в сообщении
+  const hasPhoto = msg.photo && msg.photo.length > 0;
+  
+  if (hasPhoto && prompt && ImageService.isImageEditRequest(prompt)) {
+    // ==================== РЕДАКТИРОВАНИЕ ИЗОБРАЖЕНИЯ ====================
+    try {
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      if (!user) {
+        return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+      }
+
+      // Проверяем баланс
+      if (user.tokens <= 0) {
+        return await bot.sendMessage(
+          chatId,
+          '❌ У вас недостаточно токенов!\n\nИспользуйте /buy для покупки токенов.'
+        );
+      }
+
+      await bot.sendChatAction(chatId, 'upload_photo');
+      
+      console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
+      
+      // Скачиваем фото (берём самое большое)
+      const photo = msg.photo[msg.photo.length - 1];
+      const fileLink = await bot.getFileLink(photo.file_id);
+      
+      // Загружаем изображение
+      const https = require('https');
+      const imageBuffer = await new Promise((resolve, reject) => {
+        https.get(fileLink, (response) => {
+          const chunks = [];
+          response.on('data', chunk => chunks.push(chunk));
+          response.on('end', () => resolve(Buffer.concat(chunks)));
+        }).on('error', reject);
+      });
+      
+      console.log(`📥 Изображение загружено (${imageBuffer.length} bytes)`);
+      
+      // Редактируем изображение
+      const result = await imageService.editImage(imageBuffer, prompt);
+      
+      // Проверяем токены
+      if (user.tokens < result.tokensUsed) {
+        return await bot.sendMessage(
+          chatId,
+          `❌ Недостаточно токенов.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+        );
+      }
+      
+      // Списываем токены
+      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      
+      // Сохраняем
+      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', result.tokensUsed);
+      transactionQueries.create.run(user.id, 'generation', -result.tokensUsed, 0, 'Редактирование изображения');
+      
+      const newBalance = user.tokens - result.tokensUsed;
+      
+      // Отправляем отредактированное изображение
+      try {
+        await bot.sendPhoto(chatId, result.imageBuffer, {
+          caption: `✏️ Изображение отредактировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+        });
+      } catch (photoError) {
+        console.error('Ошибка отправки фото:', photoError);
+        await bot.sendMessage(
+          chatId,
+          `✏️ Изображение отредактировано, но ошибка при отправке.\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+        );
+      }
+      
+      return; // Выходим, обработка завершена
+      
+    } catch (error) {
+      console.error('Ошибка редактирования изображения:', error);
+      await bot.sendMessage(chatId, '❌ Произошла ошибка при редактировании изображения.');
+      return;
+    }
+  }
+  
+  // Если просто фото без команды редактирования - игнорируем
+  if (hasPhoto && !prompt) {
+    return;
+  }
 
   if (!prompt || prompt.trim().length === 0) {
     return;

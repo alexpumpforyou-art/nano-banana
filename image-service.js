@@ -121,6 +121,102 @@ class ImageService {
   }
 
   /**
+   * Редактирование изображения по текстовому описанию
+   * @param {Buffer} imageBuffer - Исходное изображение
+   * @param {string} prompt - Описание изменений
+   * @returns {Promise<{imageBuffer: Buffer, tokensUsed: number}>}
+   */
+  async editImage(imageBuffer, prompt) {
+    for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
+      try {
+        const modelName = this.modelsToTry[this.currentModelIndex];
+        console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
+        console.log(`   Промпт: "${prompt}"`);
+        
+        // Конвертируем изображение в base64
+        const base64Image = imageBuffer.toString('base64');
+        
+        // Отправляем изображение + промпт для редактирования
+        const result = await this.imageModel.generateContent([
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: 'image/jpeg' // или определять автоматически
+            }
+          },
+          { text: prompt }
+        ], {
+          generationConfig: {
+            response_modalities: ['IMAGE']
+          }
+        });
+        
+        const response = await result.response;
+        
+        console.log('📋 Структура ответа (редактирование):');
+        console.log('response.candidates:', response.candidates?.length || 0);
+        
+        // Получаем отредактированное изображение
+        let editedImageBuffer = null;
+        
+        if (response.candidates && response.candidates[0]) {
+          const candidate = response.candidates[0];
+          
+          if (candidate.content && candidate.content.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
+                console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
+                break;
+              }
+            }
+          }
+        }
+        
+        if (!editedImageBuffer) {
+          console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
+          
+          // Пробуем следующую модель
+          this.currentModelIndex++;
+          if (this.currentModelIndex < this.modelsToTry.length) {
+            console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+            this.imageModel = this.genAI.getGenerativeModel({ 
+              model: this.modelsToTry[this.currentModelIndex]
+            });
+            continue;
+          }
+          
+          throw new Error('Модель не смогла отредактировать изображение');
+        }
+        
+        const tokensUsed = Math.ceil(prompt.length / 4) + 50;
+        
+        return {
+          imageBuffer: editedImageBuffer,
+          tokensUsed,
+          success: true
+        };
+        
+      } catch (error) {
+        console.error(`❌ Ошибка редактирования с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
+        
+        this.currentModelIndex++;
+        if (this.currentModelIndex < this.modelsToTry.length) {
+          console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+          this.imageModel = this.genAI.getGenerativeModel({ 
+            model: this.modelsToTry[this.currentModelIndex]
+          });
+          continue;
+        }
+        
+        throw new Error('Не удалось отредактировать изображение: ' + error.message);
+      }
+    }
+    
+    throw new Error('Ни одна модель не смогла отредактировать изображение');
+  }
+
+  /**
    * Проверяет является ли запрос запросом на генерацию изображения
    * @param {string} text - Текст сообщения
    * @returns {boolean}
@@ -135,6 +231,22 @@ class ImageService {
     
     const lowerText = text.toLowerCase();
     return imageKeywords.some(keyword => lowerText.includes(keyword));
+  }
+  
+  /**
+   * Проверяет является ли запрос командой редактирования
+   * @param {string} text - Текст сообщения
+   * @returns {boolean}
+   */
+  static isImageEditRequest(text) {
+    const editKeywords = [
+      'добавь', 'дорисуй', 'измени', 'сделай',
+      'убери', 'удали', 'нарисуй ему', 'нарисуй ей',
+      'раскрась', 'перекрась', 'поменяй'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    return editKeywords.some(keyword => lowerText.includes(keyword));
   }
 
   /**
