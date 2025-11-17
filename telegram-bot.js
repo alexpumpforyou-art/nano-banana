@@ -423,11 +423,14 @@ bot.onText(/\/referral/, async (msg) => {
     const referrals = userQueries.getReferrals.all(user.id);
     const refCount = referrals.length;
     
+    // Получаем имя бота для ссылки
+    const botInfo = await bot.getMe();
+    
     let referralText = `
 👥 *Реферальная программа*
 
 🔗 Ваша реферальная ссылка:
-\`t.me/${(await bot.getMe()).username}?start=${user.referral_code}\`
+\`t.me/${botInfo.username}?start=${user.referral_code}\`
 
 💰 Вы получаете: *${REFERRAL_BONUS} кредитов* за каждого друга
 🎁 Ваш друг получает: *${FREE_CREDITS} кредитов* при регистрации
@@ -665,7 +668,7 @@ bot.onText(/\/terms/, async (msg) => {
 
 **10. Контакты**
 
-Telegram бот: @${(await bot.getMe()).username}
+Поддержка: /support
 ${ADMIN_TELEGRAM_ID ? `Администратор: \`${ADMIN_TELEGRAM_ID}\`` : ''}
 
 ---
@@ -940,11 +943,14 @@ bot.on('callback_query', async (query) => {
       const referrals = userQueries.getReferrals.all(user.id);
       const refCount = referrals.length;
       
+      // Получаем имя бота для ссылки
+      const botInfo = await bot.getMe();
+      
       let referralText = `
 👥 *Реферальная программа*
 
 🔗 Ваша реферальная ссылка:
-\`t.me/${(await bot.getMe()).username}?start=${user.referral_code}\`
+\`t.me/${botInfo.username}?start=${user.referral_code}\`
 
 💰 Вы получаете: *${REFERRAL_BONUS} кредитов* за каждого друга
 🎁 Ваш друг получает: *${FREE_CREDITS} кредитов* при регистрации
