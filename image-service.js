@@ -27,6 +27,23 @@ class ImageService {
       
       const response = await result.response;
       
+      // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
+      console.log('📋 Структура ответа API:');
+      console.log('response.candidates:', response.candidates?.length || 0);
+      if (response.candidates && response.candidates[0]) {
+        const candidate = response.candidates[0];
+        console.log('candidate.content:', !!candidate.content);
+        console.log('candidate.content.parts:', candidate.content?.parts?.length || 0);
+        
+        if (candidate.content?.parts) {
+          candidate.content.parts.forEach((part, i) => {
+            console.log(`Part ${i} keys:`, Object.keys(part));
+            if (part.text) console.log(`  - text: ${part.text.substring(0, 100)}...`);
+            if (part.inlineData) console.log(`  - inlineData.mimeType: ${part.inlineData.mimeType}`);
+          });
+        }
+      }
+      
       // Получаем изображение из ответа
       let imageBuffer = null;
       
@@ -39,7 +56,7 @@ class ImageService {
             if (part.inlineData && part.inlineData.data) {
               // Изображение в base64
               imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-              console.log(`✅ Изображение получено (${part.inlineData.mimeType})`);
+              console.log(`✅ Изображение получено (${part.inlineData.mimeType}, ${imageBuffer.length} bytes)`);
               break;
             }
           }
@@ -47,7 +64,8 @@ class ImageService {
       }
       
       if (!imageBuffer) {
-        throw new Error('Изображение не найдено в ответе API');
+        console.error('❌ Изображение не найдено. Полный ответ:', JSON.stringify(response, null, 2));
+        throw new Error('Изображение не найдено в ответе API. Возможно модель не поддерживает генерацию изображений или требуется другая конфигурация.');
       }
       
       // Примерный подсчет токенов
