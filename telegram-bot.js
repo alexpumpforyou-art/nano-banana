@@ -991,8 +991,12 @@ bot.on('callback_query', async (query) => {
         }
       );
 
-      console.log(`✅ Инвойс создан успешно:`, invoice.message_id);
-      await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен!' });
+      console.log(`✅ Инвойс создан успешно!`);
+      console.log('   Message ID:', invoice.message_id);
+      console.log('   Chat ID:', invoice.chat.id);
+      console.log('   ⚠️ ВАЖНО: Теперь ждем pre_checkout_query от пользователя...');
+      
+      await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен! Проверьте чат.' });
     } catch (error) {
       console.error('❌ Ошибка создания инвойса:', error);
       console.error('Детали:', error.response?.body || error.message);
@@ -1008,11 +1012,30 @@ bot.on('callback_query', async (query) => {
 
 // Обработка предпроверки платежа
 bot.on('pre_checkout_query', async (query) => {
+  console.log('🔔 PRE_CHECKOUT_QUERY ПОЛУЧЕН!');
+  console.log('Query ID:', query.id);
+  console.log('From user:', query.from.id);
+  console.log('Currency:', query.currency);
+  console.log('Total amount:', query.total_amount);
+  console.log('Invoice payload:', query.invoice_payload);
+  
   try {
-    await bot.answerPreCheckoutQuery(query.id, true);
+    console.log('✅ Отправляем answerPreCheckoutQuery(true)...');
+    
+    const result = await bot.answerPreCheckoutQuery(query.id, true);
+    
+    console.log('✅ answerPreCheckoutQuery выполнен успешно!', result);
   } catch (error) {
-    console.error('Ошибка pre_checkout:', error);
-    await bot.answerPreCheckoutQuery(query.id, false, { error_message: 'Ошибка обработки платежа' });
+    console.error('❌ Ошибка pre_checkout:', error);
+    console.error('Stack:', error.stack);
+    
+    try {
+      await bot.answerPreCheckoutQuery(query.id, false, { 
+        error_message: 'Ошибка обработки платежа. Попробуйте позже.' 
+      });
+    } catch (e) {
+      console.error('❌ Не удалось отправить отказ:', e);
+    }
   }
 });
 
