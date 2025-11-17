@@ -136,6 +136,11 @@ class ImageService {
         // Конвертируем изображение в base64
         const base64Image = imageBuffer.toString('base64');
         
+        // Формируем детальный промпт для редактирования
+        const editPrompt = `Отредактируй это изображение: ${prompt}. 
+ВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. 
+Не создавай новое изображение с нуля, а именно модифицируй это.`;
+        
         // Отправляем изображение + промпт для редактирования
         const result = await this.imageModel.generateContent([
           {
@@ -144,7 +149,7 @@ class ImageService {
               mimeType: 'image/jpeg' // или определять автоматически
             }
           },
-          { text: prompt }
+          { text: editPrompt }
         ], {
           generationConfig: {
             response_modalities: ['IMAGE']

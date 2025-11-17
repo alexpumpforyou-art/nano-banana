@@ -268,7 +268,8 @@ bot.on('message', async (msg) => {
   // Проверяем есть ли фото в сообщении
   const hasPhoto = msg.photo && msg.photo.length > 0;
   
-  if (hasPhoto && prompt && ImageService.isImageEditRequest(prompt)) {
+  // Если есть фото И текст (любой) - это запрос на редактирование
+  if (hasPhoto && prompt && prompt.trim().length > 0) {
     // ==================== РЕДАКТИРОВАНИЕ ИЗОБРАЖЕНИЯ ====================
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
@@ -288,6 +289,7 @@ bot.on('message', async (msg) => {
       await bot.sendChatAction(chatId, 'upload_photo');
       
       console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
+      await bot.sendMessage(chatId, '✏️ Редактирую изображение, подождите...');
       
       // Скачиваем фото (берём самое большое)
       const photo = msg.photo[msg.photo.length - 1];
