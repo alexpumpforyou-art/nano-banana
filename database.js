@@ -1,8 +1,22 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
+
+// Определяем путь к базе данных
+// В продакшене (Railway) используем Volume: /app/data
+// Локально используем текущую директорию
+const dbDir = process.env.NODE_ENV === 'production' ? '/app/data' : __dirname;
+
+// Создаем директорию если её нет
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+const dbPath = path.join(dbDir, 'nano_banana.db');
+console.log(`📁 Путь к базе данных: ${dbPath}`);
 
 // Создаем или открываем базу данных
-const db = new Database(path.join(__dirname, 'nano_banana.db'));
+const db = new Database(dbPath);
 
 // Инициализация таблиц
 function initDatabase() {
