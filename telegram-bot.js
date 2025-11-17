@@ -852,6 +852,50 @@ bot.on('callback_query', async (query) => {
 
     await bot.answerCallbackQuery(query.id);
     await sendAndRemember(chatId, adminText, { parse_mode: 'Markdown', reply_markup: keyboard });
+  } else if (data === 'admin_stats') {
+    if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+      return await bot.answerCallbackQuery(query.id, { text: '❌ Нет доступа', show_alert: true });
+    }
+
+    try {
+      await bot.answerCallbackQuery(query.id);
+      
+      const db = require('./database');
+      
+      const totalUsers = db.db.prepare('SELECT COUNT(*) as count FROM users').get();
+      const totalPurchases = db.db.prepare(`SELECT COUNT(*) as count, SUM(amount) as total_stars FROM transactions WHERE type = 'purchase'`).get();
+      const totalGenerations = db.db.prepare(`SELECT COUNT(*) as count, SUM(credits_used) as total_credits FROM generations`).get();
+      const recentGens = db.db.prepare(`SELECT COUNT(*) as count FROM generations WHERE created_at > datetime('now', '-1 day')`).get();
+      
+      const avgPurchase = totalPurchases.total_stars && totalPurchases.count ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1) : 0;
+      const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01;
+      const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15;
+      const estimatedProfit = estimatedRevenue - estimatedCost;
+      
+      let statsText = `📊 *Статистика Nano Banana*\n\n`;
+      statsText += `👥 Пользователей: ${totalUsers.count}\n\n`;
+      statsText += `💰 *Продажи:*\n`;
+      statsText += `└ Покупок: ${totalPurchases.count || 0}\n`;
+      statsText += `└ Заработано: ${totalPurchases.total_stars || 0} ⭐\n`;
+      statsText += `└ Средний чек: ${avgPurchase} ⭐\n\n`;
+      statsText += `🤖 *Генерации:*\n`;
+      statsText += `└ Всего: ${totalGenerations.count || 0}\n`;
+      statsText += `└ Использовано: ${(totalGenerations.total_credits || 0).toLocaleString('ru-RU')} кредитов\n`;
+      statsText += `└ За 24 часа: ${recentGens.count || 0}\n\n`;
+      statsText += `💵 *Финансы:*\n`;
+      statsText += `└ Доход: $${estimatedRevenue.toFixed(2)}\n`;
+      statsText += `└ Затраты: $${estimatedCost.toFixed(2)}\n`;
+      statsText += `└ Прибыль: $${estimatedProfit.toFixed(2)}`;
+      
+      const backButton = {
+        inline_keyboard: [[{ text: '◀️ Назад', callback_data: 'menu_admin' }]]
+      };
+      
+      await sendAndRemember(chatId, statsText, { parse_mode: 'Markdown', reply_markup: backButton });
+    } catch (error) {
+      console.error('Ошибка admin_stats:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
+    }
   } else if (data === 'menu_back') {
     // Возвращаемся в главное меню
     try {
@@ -919,20 +963,25 @@ bot.on('callback_query', async (query) => {
     const stars = parseInt(data.split('_')[1]);
     const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
 
+    console.log(`💳 Попытка создать инвойс: ${stars} Stars для пользователя ${chatId}`);
+
     if (!package_) {
-      return await bot.answerCallbackQuery(query.id, { text: '❌ Пакет не найден' });
+      console.error(`❌ Пакет не найден для ${stars} Stars`);
+      return await bot.answerCallbackQuery(query.id, { text: '❌ Пакет не найден', show_alert: true });
     }
 
     try {
+      console.log(`📦 Создаем инвойс для пакета:`, package_);
+      
       // Отправляем инвойс для оплаты Stars
-      await bot.sendInvoice(
+      const invoice = await bot.sendInvoice(
         chatId,
-        `${package_.credits} кредитов для Nano Banana`,
-        `Пакет: ${package_.label} | ${package_.description}`,
-        `payload_${chatId}_${Date.now()}`,
+        `${package_.credits} кредитов`, // title (max 32 chars)
+        `Пакет ${package_.description} для Nano Banana`, // description (max 255 chars)
+        `${chatId}_${stars}_${Date.now()}`, // payload
         '', // provider_token пустой для Stars
         'XTR', // валюта Telegram Stars
-        [{ label: package_.label, amount: stars }],
+        [{ label: `${package_.credits} кредитов`, amount: stars }], // prices
         {
           need_name: false,
           need_phone_number: false,
@@ -942,12 +991,15 @@ bot.on('callback_query', async (query) => {
         }
       );
 
+      console.log(`✅ Инвойс создан успешно:`, invoice.message_id);
       await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен!' });
     } catch (error) {
-      console.error('Ошибка создания инвойса:', error);
-      console.error('Детали ошибки:', error.response?.body || error.message);
+      console.error('❌ Ошибка создания инвойса:', error);
+      console.error('Детали:', error.response?.body || error.message);
+      console.error('Stack:', error.stack);
+      
       await bot.answerCallbackQuery(query.id, { 
-        text: '❌ Ошибка создания платежа. Попробуйте позже.', 
+        text: `❌ Ошибка: ${error.message}`, 
         show_alert: true 
       });
     }
