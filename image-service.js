@@ -3,11 +3,11 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Пробуем разные модели для генерации изображений
+    // Модели для генерации изображений (работают с SDK 0.24.1+)
     this.modelsToTry = [
+      'gemini-2.0-flash-exp-image-generation',
       'gemini-2.5-flash-image',
-      'gemini-2.5-flash-image-preview',
-      'gemini-2.0-flash-exp-image-generation'
+      'gemini-2.5-flash-image-preview'
     ];
     this.currentModelIndex = 0;
     this.imageModel = this.genAI.getGenerativeModel({ 
@@ -21,12 +21,6 @@ class ImageService {
    * @returns {Promise<{imageData: string, tokensUsed: number}>}
    */
   async generateImage(prompt) {
-    // ВРЕМЕННОЕ РЕШЕНИЕ: Gemini API не поддерживает прямую генерацию изображений
-    // Возвращаем информационное сообщение
-    if (this.imageGenerationDisabled) {
-      throw new Error('⚠️ Генерация изображений временно недоступна. Gemini API пока не поддерживает эту функцию в общем доступе. Пожалуйста, используйте текстовые запросы.');
-    }
-    
     // Пробуем разные модели
     for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
       try {
