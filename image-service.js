@@ -3,18 +3,16 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // ВРЕМЕННО: используем текстовые модели для описания
-    // Генерация изображений через Gemini API требует специального доступа
+    // Пробуем разные модели для генерации изображений
     this.modelsToTry = [
-      'gemini-2.0-flash',
-      'gemini-2.5-flash',
-      'gemini-1.5-flash'
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash-image-preview',
+      'gemini-2.0-flash-exp-image-generation'
     ];
     this.currentModelIndex = 0;
     this.imageModel = this.genAI.getGenerativeModel({ 
       model: this.modelsToTry[this.currentModelIndex]
     });
-    this.imageGenerationDisabled = true; // Флаг что генерация изображений временно отключена
   }
 
   /**

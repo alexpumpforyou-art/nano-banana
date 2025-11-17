@@ -134,28 +134,37 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     const welcomeText = `
 🍌 ${isNewUser ? 'Добро пожаловать' : 'С возвращением'} в Nano Banana!
 
-Я помогу вам генерировать контент с помощью Google Gemini AI.
+💎 Ваш баланс: *${user.credits} кредитов*
+📊 Генераций: ${user.total_generations || 0}
+${user.referral_code ? `\n🔗 Пригласите друзей и получите бонусы!` : ''}
 
-💎 Ваш баланс: ${user.credits} кредитов
-📊 Всего генераций: ${user.total_generations || 0}
-${user.referral_code ? `🔗 Ваша реферальная ссылка:\nt.me/${(await bot.getMe()).username}?start=${user.referral_code}\n` : ''}
-💰 Цены:
-• Текст (короткий): ${PRICES.TEXT_SHORT} кредит
-• Текст (длинный): ${PRICES.TEXT_LONG} кредита
-• Изображение: ${PRICES.IMAGE_GEN} кредитов (временно недоступно)
-
-📝 Просто отправьте мне текст, и я сгенерирую ответ!
-
-Команды:
-/balance - баланс и статистика
-/buy - купить кредиты
-/referral - реферальная программа
-/history - история генераций
-/help - помощь
-${ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID ? '\n👑 /admin - панель администратора' : ''}
+📝 Отправьте мне текст для генерации или выберите действие:
     `;
 
-    await sendAndRemember(chatId, welcomeText);
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '🎨 Генерация изображений', callback_data: 'menu_image' },
+          { text: '💎 Баланс', callback_data: 'menu_balance' }
+        ],
+        [
+          { text: '💰 Купить кредиты', callback_data: 'menu_buy' },
+          { text: '👥 Рефералы', callback_data: 'menu_referral' }
+        ],
+        [
+          { text: '📊 История', callback_data: 'menu_history' },
+          { text: '❓ Помощь', callback_data: 'menu_help' }
+        ]
+      ]
+    };
+    
+    if (ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID) {
+      keyboard.inline_keyboard.push([
+        { text: '👑 Админ-панель', callback_data: 'menu_admin' }
+      ]);
+    }
+
+    await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Ошибка в /start:', error);
     await bot.sendMessage(chatId, '❌ Произошла ошибка при инициализации.');
@@ -602,9 +611,291 @@ bot.onText(/\/adminunblock\s+(\S+)/, async (msg, match) => {
 
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
+  const messageId = query.message.message_id;
   const data = query.data;
 
-  if (data === 'check_balance') {
+  // Удаляем старое сообщение для всех кнопок меню
+  if (data.startsWith('menu_')) {
+    try {
+      await bot.deleteMessage(chatId, messageId);
+    } catch (e) {
+      // Игнорируем ошибки удаления
+    }
+  }
+
+  // Обработка кнопок главного меню
+  if (data === 'menu_balance') {
+    try {
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      if (!user) {
+        return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+      }
+
+      const refCount = userQueries.countReferrals.get(user.id);
+      
+      const balanceText = `
+💎 *Ваша статистика*
+
+💰 Баланс: *${user.credits} кредитов*
+📊 Всего генераций: ${user.total_generations || 0}
+📉 Потрачено: ${user.total_spent_credits || 0} кредитов
+
+👥 Рефералы: ${refCount.count || 0}
+🎁 Бонусов заработано: ${user.referral_bonus_earned || 0} кредитов
+
+📅 Регистрация: ${new Date(user.created_at).toLocaleDateString('ru-RU')}
+      `;
+
+      const backButton = {
+        inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+      };
+
+      await bot.answerCallbackQuery(query.id);
+      await sendAndRemember(chatId, balanceText, { parse_mode: 'Markdown', reply_markup: backButton });
+    } catch (error) {
+      console.error('Ошибка menu_balance:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
+    }
+  } else if (data === 'menu_buy') {
+    try {
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      if (!user) {
+        return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+      }
+
+      const keyboard = {
+        inline_keyboard: [
+          ...CREDIT_PACKAGES.map(pkg => [{
+            text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
+            callback_data: `buy_${pkg.stars}`
+          }]),
+          [{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]
+        ]
+      };
+
+      const priceInfo = `💰 *Магазин кредитов*\n\n` +
+        `💎 Ваш баланс: ${user.credits} кредитов\n\n` +
+        `📊 Стоимость операций:\n` +
+        `• Текст (короткий): ${PRICES.TEXT_SHORT} кредит\n` +
+        `• Текст (длинный): ${PRICES.TEXT_LONG} кредита\n` +
+        `• Генерация изображения: ${PRICES.IMAGE_GEN} кредитов (скоро)\n\n` +
+        `🎁 Больше покупаете = больше бонусов!`;
+
+      await bot.answerCallbackQuery(query.id);
+      const sentMsg = await bot.sendMessage(chatId, priceInfo, { reply_markup: keyboard, parse_mode: 'Markdown' });
+      
+      const messages = userLastMessages.get(chatId) || [];
+      messages.push(sentMsg.message_id);
+      userLastMessages.set(chatId, messages);
+    } catch (error) {
+      console.error('Ошибка menu_buy:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
+    }
+  } else if (data === 'menu_referral') {
+    try {
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      if (!user) {
+        return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+      }
+
+      const referrals = userQueries.getReferrals.all(user.id);
+      const refCount = referrals.length;
+      
+      let referralText = `
+👥 *Реферальная программа*
+
+🔗 Ваша реферальная ссылка:
+\`t.me/${(await bot.getMe()).username}?start=${user.referral_code}\`
+
+💰 Вы получаете: *${REFERRAL_BONUS} кредитов* за каждого друга
+🎁 Ваш друг получает: *${FREE_CREDITS} кредитов* при регистрации
+
+📊 *Ваша статистика:*
+👥 Приглашено друзей: ${refCount}
+💎 Заработано кредитов: ${user.referral_bonus_earned || 0}
+      `;
+
+      if (referrals.length > 0) {
+        referralText += `\n\n🏆 *Ваши рефералы:*\n`;
+        referrals.slice(0, 10).forEach((ref, idx) => {
+          referralText += `${idx + 1}. @${ref.username || 'пользователь'} (${ref.total_generations || 0} генераций)\n`;
+        });
+        if (referrals.length > 10) {
+          referralText += `\n_...и еще ${referrals.length - 10}_`;
+        }
+      }
+
+      const backButton = {
+        inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+      };
+
+      await bot.answerCallbackQuery(query.id);
+      await sendAndRemember(chatId, referralText, { parse_mode: 'Markdown', reply_markup: backButton });
+    } catch (error) {
+      console.error('Ошибка menu_referral:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
+    }
+  } else if (data === 'menu_history') {
+    try {
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      if (!user) {
+        return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+      }
+
+      const history = generationQueries.getHistory.all(user.id, 5);
+
+      if (history.length === 0) {
+        const backButton = {
+          inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+        };
+        await bot.answerCallbackQuery(query.id);
+        return await sendAndRemember(chatId, '📝 История генераций пуста.', { reply_markup: backButton });
+      }
+
+      let text = '📝 *Последние генерации:*\n\n';
+      history.forEach((gen, idx) => {
+        text += `${idx + 1}. "${gen.prompt.substring(0, 50)}..."\n`;
+        text += `   💎 ${gen.credits_used} кредитов | ${new Date(gen.created_at).toLocaleString('ru-RU')}\n\n`;
+      });
+
+      const backButton = {
+        inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+      };
+
+      await bot.answerCallbackQuery(query.id);
+      await sendAndRemember(chatId, text, { parse_mode: 'Markdown', reply_markup: backButton });
+    } catch (error) {
+      console.error('Ошибка menu_history:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
+    }
+  } else if (data === 'menu_help') {
+    const helpText = `
+🍌 *Nano Banana - Помощь*
+
+📝 *Как использовать:*
+1. Отправьте текст для генерации ответа
+2. Нажмите "🎨 Генерация изображений" для создания картинок (скоро)
+
+💎 *Токены:*
+- Новые пользователи: ${FREE_CREDITS} кредитов
+- Покупайте через кнопку "💰 Купить кредиты"
+- 1 Star = ${CREDITS_PER_STAR} кредитов
+
+🎨 *Возможности:*
+• Генерация текста (1-2 кредита)
+• Создание изображений (скоро)
+• Редактирование изображений (скоро)
+
+👥 *Рефералы:*
+Приглашайте друзей и получайте ${REFERRAL_BONUS} кредитов за каждого!
+    `;
+
+    const backButton = {
+      inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+    };
+
+    await bot.answerCallbackQuery(query.id);
+    await sendAndRemember(chatId, helpText, { parse_mode: 'Markdown', reply_markup: backButton });
+  } else if (data === 'menu_image') {
+    const imageText = `
+🎨 *Генерация изображений*
+
+✅ *Как генерировать:*
+Напишите: "нарисуй пингвина на льдине"
+Или: "создай картинку с котом в космосе"
+
+✅ *Как редактировать:*
+1. Отправьте фото боту
+2. Добавьте описание: "добавь шляпу" или "сделай фон синим"
+3. Получите отредактированное изображение!
+
+💎 *Цены:*
+• Генерация: ${PRICES.IMAGE_GEN} кредитов
+• Редактирование: ${PRICES.IMAGE_EDIT} кредитов
+
+🔥 Попробуйте прямо сейчас!
+    `;
+
+    const backButton = {
+      inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+    };
+
+    await bot.answerCallbackQuery(query.id);
+    await sendAndRemember(chatId, imageText, { parse_mode: 'Markdown', reply_markup: backButton });
+  } else if (data === 'menu_admin') {
+    if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+      return await bot.answerCallbackQuery(query.id, { text: '❌ Нет доступа', show_alert: true });
+    }
+
+    const adminText = `
+👑 *Панель администратора*
+
+Команды:
+/adminuser <id> - инфо о пользователе
+/adminadd <id> <credits> - начислить
+/adminblock <id> - заблокировать
+/adminunblock <id> - разблокировать
+
+Или нажмите на кнопку для статистики:
+    `;
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
+        [{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]
+      ]
+    };
+
+    await bot.answerCallbackQuery(query.id);
+    await sendAndRemember(chatId, adminText, { parse_mode: 'Markdown', reply_markup: keyboard });
+  } else if (data === 'menu_back') {
+    // Возвращаемся в главное меню
+    try {
+      await bot.answerCallbackQuery(query.id);
+      
+      const user = userQueries.getByTelegramId.get(chatId.toString());
+      
+      const welcomeText = `
+🍌 С возвращением в Nano Banana!
+
+💎 Ваш баланс: *${user.credits} кредитов*
+📊 Генераций: ${user.total_generations || 0}
+
+📝 Отправьте мне текст для генерации или выберите действие:
+      `;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🎨 Генерация изображений', callback_data: 'menu_image' },
+            { text: '💎 Баланс', callback_data: 'menu_balance' }
+          ],
+          [
+            { text: '💰 Купить кредиты', callback_data: 'menu_buy' },
+            { text: '👥 Рефералы', callback_data: 'menu_referral' }
+          ],
+          [
+            { text: '📊 История', callback_data: 'menu_history' },
+            { text: '❓ Помощь', callback_data: 'menu_help' }
+          ]
+        ]
+      };
+      
+      if (ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID) {
+        keyboard.inline_keyboard.push([
+          { text: '👑 Админ-панель', callback_data: 'menu_admin' }
+        ]);
+      }
+
+      await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Ошибка menu_back:', error);
+    }
+  } else if (data === 'check_balance') {
     // Обработка проверки баланса
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
@@ -784,10 +1075,8 @@ bot.on('message', async (msg) => {
       await bot.sendChatAction(chatId, 'upload_photo');
       
       console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
-      await bot.sendMessage(chatId, '⚠️ Редактирование изображений временно недоступно. Gemini API пока не поддерживает эту функцию.');
-      return;
+      await bot.sendMessage(chatId, '✏️ Редактирую изображение, подождите...');
       
-      /* ВРЕМЕННО ОТКЛЮЧЕНО - Gemini API не поддерживает
       // Скачиваем фото (берём самое большое)
       const photo = msg.photo[msg.photo.length - 1];
       const fileLink = await bot.getFileLink(photo.file_id);
@@ -818,7 +1107,21 @@ bot.on('message', async (msg) => {
       transactionQueries.create.run(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
       
       const newBalance = user.credits - creditsUsed;
-      */ // Конец закомментированного кода редактирования
+      
+      // Отправляем отредактированное изображение
+      try {
+        await bot.sendPhoto(chatId, result.imageBuffer, {
+          caption: `✏️ Изображение отредактировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+        });
+      } catch (photoError) {
+        console.error('Ошибка отправки фото:', photoError);
+        await bot.sendMessage(
+          chatId,
+          `✏️ Изображение отредактировано, но ошибка при отправке.\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+        );
+      }
+      
+      return; // Выходим, обработка завершена
       
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
@@ -860,10 +1163,7 @@ bot.on('message', async (msg) => {
     const isImageRequest = ImageService.isImageRequest(prompt);
     
     if (isImageRequest) {
-      // ВРЕМЕННО ОТКЛЮЧЕНО
-      return await bot.sendMessage(chatId, '⚠️ Генерация изображений временно недоступна. Gemini API пока не поддерживает эту функцию. Используйте текстовые запросы.');
-      
-      /* Генерация изображения
+      // Генерация изображения
       await bot.sendChatAction(chatId, 'upload_photo');
       
       const imagePrompt = ImageService.extractImagePrompt(prompt);
@@ -898,7 +1198,19 @@ bot.on('message', async (msg) => {
       );
       
       const newBalance = user.credits - creditsUsed;
-      */ // Конец закомментированного кода генерации изображений
+      
+      // Отправляем изображение
+      try {
+        await bot.sendPhoto(chatId, result.imageBuffer, {
+          caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+        });
+      } catch (photoError) {
+        console.error('Ошибка отправки фото:', photoError);
+        await bot.sendMessage(
+          chatId,
+          `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+        );
+      }
     } else {
       // Обычная генерация текста
       await bot.sendChatAction(chatId, 'typing');
