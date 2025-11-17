@@ -3,9 +3,15 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Используем модель для генерации изображений
+    // Пробуем разные модели для генерации изображений
+    this.modelsToTry = [
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash-image-preview',
+      'gemini-2.0-flash-exp-image-generation'
+    ];
+    this.currentModelIndex = 0;
     this.imageModel = this.genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash-exp-image-generation'
+      model: this.modelsToTry[this.currentModelIndex]
     });
   }
 
@@ -15,15 +21,19 @@ class ImageService {
    * @returns {Promise<{imageData: string, tokensUsed: number}>}
    */
   async generateImage(prompt) {
-    try {
-      console.log(`🎨 Генерирую изображение: "${prompt}"`);
-      
-      // Генерируем изображение с правильной конфигурацией
-      const result = await this.imageModel.generateContent(prompt, {
-        generationConfig: {
-          response_modalities: ['IMAGE']
-        }
-      });
+    // Пробуем разные модели
+    for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
+      try {
+        const modelName = this.modelsToTry[this.currentModelIndex];
+        console.log(`🎨 Генерирую изображение через модель: ${modelName}`);
+        console.log(`   Промпт: "${prompt}"`);
+        
+        // Генерируем изображение с правильной конфигурацией
+        const result = await this.imageModel.generateContent(prompt, {
+          generationConfig: {
+            response_modalities: ['IMAGE']
+          }
+        });
       
       const response = await result.response;
       
@@ -64,8 +74,19 @@ class ImageService {
       }
       
       if (!imageBuffer) {
-        console.error('❌ Изображение не найдено. Полный ответ:', JSON.stringify(response, null, 2));
-        throw new Error('Изображение не найдено в ответе API. Возможно модель не поддерживает генерацию изображений или требуется другая конфигурация.');
+        console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} вернула только текст, не изображение`);
+        
+        // Пробуем следующую модель
+        this.currentModelIndex++;
+        if (this.currentModelIndex < this.modelsToTry.length) {
+          console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+          this.imageModel = this.genAI.getGenerativeModel({ 
+            model: this.modelsToTry[this.currentModelIndex]
+          });
+          continue; // Пробуем следующую модель
+        }
+        
+        throw new Error('Ни одна модель не смогла сгенерировать изображение. Все модели возвращают только текст.');
       }
       
       // Примерный подсчет токенов
@@ -78,10 +99,25 @@ class ImageService {
         tokensUsed,
         success: true
       };
+      
     } catch (error) {
-      console.error('❌ Ошибка генерации изображения:', error.message);
+      console.error(`❌ Ошибка с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
+      
+      // Пробуем следующую модель при ошибке
+      this.currentModelIndex++;
+      if (this.currentModelIndex < this.modelsToTry.length) {
+        console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+        this.imageModel = this.genAI.getGenerativeModel({ 
+          model: this.modelsToTry[this.currentModelIndex]
+        });
+        continue;
+      }
+      
       throw new Error('Не удалось сгенерировать изображение: ' + error.message);
     }
+    }
+    
+    throw new Error('Ни одна модель генерации изображений не доступна для вашего API ключа');
   }
 
   /**
