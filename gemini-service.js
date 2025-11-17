@@ -4,13 +4,13 @@ class GeminiService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.apiKey = apiKey;
-    // Список моделей для автоматического перебора (от лучшей к запасной)
+    // Список моделей для автоматического перебора (начинаем с менее популярных)
     this.modelsToTry = [
-      'gemini-2.5-flash',         // Стабильная, быстрая, современная
-      'gemini-2.0-flash',          // Запасная стабильная
-      'gemini-flash-latest',       // Автоматически последняя flash
-      'gemini-2.5-pro',            // Если нужно качество
-      'gemini-2.0-flash-exp'       // Экспериментальная
+      'gemini-2.0-flash',          // Стабильная, быстрая
+      'gemini-flash-latest',       // Автоматически последняя
+      'gemini-2.5-flash',          // Новая (может быть перегружена)
+      'gemini-2.0-flash-lite',     // Легкая версия
+      'gemini-2.5-pro'             // Качественная
     ];
     this.currentModelIndex = 0;
     this.model = this.genAI.getGenerativeModel({ 
@@ -43,8 +43,8 @@ class GeminiService {
       } catch (error) {
         console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не работает:`, error.message);
         
-        // Если модель не найдена или квота исчерпана, пробуем следующую
-        if (error.message.includes('404') || error.message.includes('429') || error.message.includes('quota')) {
+        // Если модель не найдена, квота исчерпана или перегружена, пробуем следующую
+        if (error.message.includes('404') || error.message.includes('429') || error.message.includes('503') || error.message.includes('quota') || error.message.includes('overloaded')) {
           this.currentModelIndex++;
           if (this.currentModelIndex < this.modelsToTry.length) {
             console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
