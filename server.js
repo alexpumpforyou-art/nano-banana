@@ -187,6 +187,42 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Диагностический endpoint - показывает доступные модели
+app.get('/api/debug/models', async (req, res) => {
+  try {
+    const fetch = require('node-fetch');
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.error) {
+      return res.json({ 
+        error: data.error.message,
+        apiKeyPreview: apiKey ? apiKey.substring(0, 20) + '...' : 'NOT SET'
+      });
+    }
+    
+    const workingModels = data.models
+      ? data.models
+          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+          .map(m => m.name.replace('models/', ''))
+      : [];
+    
+    res.json({
+      success: true,
+      totalModels: data.models?.length || 0,
+      workingModels,
+      recommendation: workingModels[0] || 'none',
+      apiKeyPreview: apiKey ? apiKey.substring(0, 20) + '...' : 'NOT SET'
+    });
+    
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔═══════════════════════════════════════════╗
