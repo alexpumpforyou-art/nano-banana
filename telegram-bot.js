@@ -1,10 +1,12 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { userQueries, transactionQueries, generationQueries } = require('./database');
 const GeminiService = require('./gemini-service');
+const ImageService = require('./image-service');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
+const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
 const FREE_TOKENS = parseInt(process.env.FREE_TOKENS) || 100;
 const TOKENS_PER_STAR = parseInt(process.env.TOKENS_PER_STAR) || 1000;
@@ -282,42 +284,101 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // Отправляем индикатор набора текста
-    await bot.sendChatAction(chatId, 'typing');
-
-    // Генерируем ответ
-    const result = await gemini.generate(prompt);
-
-    // Проверяем, хватит ли токенов
-    if (user.tokens < result.tokensUsed) {
-      return await bot.sendMessage(
+    // Проверяем, это запрос на генерацию изображения?
+    const isImageRequest = ImageService.isImageRequest(prompt);
+    
+    if (isImageRequest) {
+      // Генерация изображения
+      await bot.sendChatAction(chatId, 'upload_photo');
+      
+      const imagePrompt = ImageService.extractImagePrompt(prompt);
+      console.log(`🎨 Запрос на генерацию изображения: "${imagePrompt}"`);
+      
+      const result = await imageService.generateImage(imagePrompt);
+      
+      // Проверяем, хватит ли токенов
+      if (user.tokens < result.tokensUsed) {
+        return await bot.sendMessage(
+          chatId,
+          `❌ Недостаточно токенов.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+        );
+      }
+      
+      // Списываем токены
+      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      
+      // Сохраняем генерацию
+      generationQueries.create.run(user.id, prompt, '[Изображение]', result.tokensUsed);
+      
+      // Сохраняем транзакцию
+      transactionQueries.create.run(
+        user.id,
+        'generation',
+        -result.tokensUsed,
+        0,
+        'Генерация изображения'
+      );
+      
+      const newBalance = user.tokens - result.tokensUsed;
+      
+      // Отправляем изображение
+      try {
+        // imageData может быть base64 или URL
+        if (result.imageData.startsWith('http')) {
+          await bot.sendPhoto(chatId, result.imageData, {
+            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+          });
+        } else {
+          // Если это base64 или другой формат
+          await bot.sendPhoto(chatId, Buffer.from(result.imageData, 'base64'), {
+            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+          });
+        }
+      } catch (photoError) {
+        console.error('Ошибка отправки фото:', photoError);
+        await bot.sendMessage(
+          chatId,
+          `🎨 Изображение сгенерировано, но не могу его отправить.\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+        );
+      }
+      
+    } else {
+      // Обычная генерация текста
+      await bot.sendChatAction(chatId, 'typing');
+      
+      const result = await gemini.generate(prompt);
+      
+      // Проверяем, хватит ли токенов
+      if (user.tokens < result.tokensUsed) {
+        return await bot.sendMessage(
+          chatId,
+          `❌ Недостаточно токенов для этого запроса.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+        );
+      }
+      
+      // Списываем токены
+      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      
+      // Сохраняем генерацию
+      generationQueries.create.run(user.id, prompt, result.text, result.tokensUsed);
+      
+      // Сохраняем транзакцию
+      transactionQueries.create.run(
+        user.id,
+        'generation',
+        -result.tokensUsed,
+        0,
+        'Генерация текста'
+      );
+      
+      const newBalance = user.tokens - result.tokensUsed;
+      
+      // Отправляем ответ
+      await bot.sendMessage(
         chatId,
-        `❌ Недостаточно токенов для этого запроса.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+        `${result.text}\n\n---\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
       );
     }
-
-    // Списываем токены
-    userQueries.updateTokens.run(-result.tokensUsed, user.id);
-
-    // Сохраняем генерацию
-    generationQueries.create.run(user.id, prompt, result.text, result.tokensUsed);
-
-    // Сохраняем транзакцию
-    transactionQueries.create.run(
-      user.id,
-      'generation',
-      -result.tokensUsed,
-      0,
-      'Генерация текста'
-    );
-
-    const newBalance = user.tokens - result.tokensUsed;
-
-    // Отправляем ответ
-    await bot.sendMessage(
-      chatId,
-      `${result.text}\n\n---\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-    );
 
   } catch (error) {
     console.error('Ошибка генерации:', error);
