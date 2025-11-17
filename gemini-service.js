@@ -3,8 +3,11 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class GeminiService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Используем актуальную модель gemini-1.5-flash
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Используем новую актуальную модель gemini-2.0-flash-exp
+    // Если не сработает, попробуем gemini-1.5-pro или gemini-pro
+    this.model = this.genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash-exp'
+    });
   }
 
   /**
