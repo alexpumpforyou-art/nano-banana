@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { userQueries, transactionQueries, generationQueries } = require('./database');
+const { userQueries, transactionQueries, generationQueries, referralQueries, generateReferralCode } = require('./database');
 const GeminiService = require('./gemini-service');
 const ImageService = require('./image-service');
 
@@ -8,74 +8,154 @@ const bot = new TelegramBot(token, { polling: true });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
-const FREE_TOKENS = parseInt(process.env.FREE_TOKENS) || 100;
-const TOKENS_PER_STAR = parseInt(process.env.TOKENS_PER_STAR) || 2000;
+// Новая система кредитов (деноминация: 50 токенов = 1 кредит)
+const FREE_CREDITS = parseInt(process.env.FREE_CREDITS) || 10; // было 100-200 токенов = 2-4 кредита
+const CREDITS_PER_STAR = parseInt(process.env.CREDITS_PER_STAR) || 40; // было 2000 токенов = 40 кредитов
+const REFERRAL_BONUS = parseInt(process.env.REFERRAL_BONUS) || 5; // бонус за реферала
+const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 
-// Генерируем пакеты токенов динамически на основе TOKENS_PER_STAR
-const TOKEN_PACKAGES = [
+// Цены на операции (в кредитах)
+const PRICES = {
+  TEXT_SHORT: 1,      // короткий текст (до 500 символов) - было 40-60 токенов
+  TEXT_LONG: 2,       // длинный текст (500+ символов)
+  IMAGE_GEN: 10,      // генерация изображения - было 1000-3000 токенов
+  IMAGE_EDIT: 15      // редактирование изображения - было 1500-4000 токенов
+};
+
+// Генерируем пакеты кредитов динамически на основе CREDITS_PER_STAR
+const CREDIT_PACKAGES = [
   { 
     stars: 1, 
-    tokens: TOKENS_PER_STAR * 1, 
-    label: `${TOKENS_PER_STAR} токенов`,
-    description: 'Базовый пакет' 
+    credits: CREDITS_PER_STAR * 1, 
+    label: `${CREDITS_PER_STAR} кредитов`,
+    description: 'Базовый' 
   },
   { 
     stars: 5, 
-    tokens: Math.floor(TOKENS_PER_STAR * 5 * 1.1), 
-    label: `${Math.floor(TOKENS_PER_STAR * 5 * 1.1)} токенов`,
-    description: '+10% бонус' 
+    credits: Math.floor(CREDITS_PER_STAR * 5 * 1.1), 
+    label: `${Math.floor(CREDITS_PER_STAR * 5 * 1.1)} кредитов`,
+    description: '+10% 💎' 
   },
   { 
     stars: 10, 
-    tokens: Math.floor(TOKENS_PER_STAR * 10 * 1.2), 
-    label: `${Math.floor(TOKENS_PER_STAR * 10 * 1.2)} токенов`,
-    description: '+20% бонус' 
+    credits: Math.floor(CREDITS_PER_STAR * 10 * 1.2), 
+    label: `${Math.floor(CREDITS_PER_STAR * 10 * 1.2)} кредитов`,
+    description: '+20% 💎' 
   },
   { 
     stars: 25, 
-    tokens: Math.floor(TOKENS_PER_STAR * 25 * 1.3), 
-    label: `${Math.floor(TOKENS_PER_STAR * 25 * 1.3)} токенов`,
-    description: '+30% бонус' 
+    credits: Math.floor(CREDITS_PER_STAR * 25 * 1.3), 
+    label: `${Math.floor(CREDITS_PER_STAR * 25 * 1.3)} кредитов`,
+    description: '+30% 💎' 
   },
   { 
     stars: 50, 
-    tokens: Math.floor(TOKENS_PER_STAR * 50 * 1.5), 
-    label: `${Math.floor(TOKENS_PER_STAR * 50 * 1.5)} токенов`,
-    description: '+50% бонус 🔥' 
+    credits: Math.floor(CREDITS_PER_STAR * 50 * 1.5), 
+    label: `${Math.floor(CREDITS_PER_STAR * 50 * 1.5)} кредитов`,
+    description: '+50% 🔥' 
   },
 ];
 
+// Для удаления старых сообщений
+const userLastMessages = new Map(); // chatId -> [messageIds]
+
+// Функция удаления старых сообщений
+async function deleteOldMessages(chatId) {
+  const messages = userLastMessages.get(chatId) || [];
+  for (const msgId of messages) {
+    try {
+      await bot.deleteMessage(chatId, msgId);
+    } catch (e) {
+      // Игнорируем ошибки удаления (сообщение уже удалено или слишком старое)
+    }
+  }
+  userLastMessages.set(chatId, []);
+}
+
+// Функция отправки сообщения с запоминанием ID
+async function sendAndRemember(chatId, text, options = {}) {
+  const sentMsg = await bot.sendMessage(chatId, text, options);
+  const messages = userLastMessages.get(chatId) || [];
+  messages.push(sentMsg.message_id);
+  userLastMessages.set(chatId, messages);
+  return sentMsg;
+}
+
 // ==================== КОМАНДЫ ====================
 
-bot.onText(/\/start/, async (msg) => {
+bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || msg.from.first_name;
+  const referralCode = match && match[1] ? match[1].trim() : null;
 
   try {
-    // Создаем или получаем пользователя
-    const user = userQueries.getOrCreateTelegramUser.get(
-      chatId.toString(),
-      username,
-      FREE_TOKENS
-    );
+    await deleteOldMessages(chatId); // Удаляем старые сообщения
+    
+    let user = userQueries.getByTelegramId.get(chatId.toString());
+    let isNewUser = false;
+    
+    if (!user) {
+      // Новый пользователь - создаем с реферальным кодом
+      const newReferralCode = generateReferralCode();
+      user = userQueries.getOrCreateTelegramUser.get(
+        chatId.toString(),
+        username,
+        FREE_CREDITS,
+        newReferralCode
+      );
+      isNewUser = true;
+      
+      // Если пришел по реферальной ссылке
+      if (referralCode) {
+        const referrer = userQueries.getByReferralCode.get(referralCode);
+        if (referrer && referrer.telegram_id !== chatId.toString()) {
+          // Устанавливаем реферера
+          userQueries.setReferrer.run(referrer.id, user.id);
+          
+          // Начисляем бонус рефереру
+          userQueries.addReferralBonus.run(REFERRAL_BONUS, REFERRAL_BONUS, referrer.id);
+          
+          // Записываем в таблицу рефералов
+          referralQueries.create.run(referrer.id, user.id, REFERRAL_BONUS);
+          
+          // Уведомляем реферера
+          try {
+            await bot.sendMessage(
+              referrer.telegram_id,
+              `🎉 По вашей ссылке зарегистрировался новый пользователь!\n\n💎 +${REFERRAL_BONUS} кредитов в подарок!`
+            );
+          } catch (e) { /* Игнорируем если не удалось отправить */ }
+          
+          console.log(`👥 Новый реферал: ${username} (реферер: ${referrer.username})`);
+        }
+      }
+    }
 
     const welcomeText = `
-🍌 Добро пожаловать в Nano Banana!
+🍌 ${isNewUser ? 'Добро пожаловать' : 'С возвращением'} в Nano Banana!
 
-Я помогу вам генерировать текст с помощью Google Gemini AI.
+Я помогу вам генерировать контент с помощью Google Gemini AI.
 
-💎 Ваш баланс: ${user.tokens} токенов
+💎 Ваш баланс: ${user.credits} кредитов
+📊 Всего генераций: ${user.total_generations || 0}
+${user.referral_code ? `🔗 Ваша реферальная ссылка:\nt.me/${(await bot.getMe()).username}?start=${user.referral_code}\n` : ''}
+💰 Цены:
+• Текст (короткий): ${PRICES.TEXT_SHORT} кредит
+• Текст (длинный): ${PRICES.TEXT_LONG} кредита
+• Изображение: ${PRICES.IMAGE_GEN} кредитов (временно недоступно)
 
-📝 Просто отправьте мне любой текст, и я сгенерирую ответ!
+📝 Просто отправьте мне текст, и я сгенерирую ответ!
 
 Команды:
-/balance - проверить баланс
-/buy - купить токены
+/balance - баланс и статистика
+/buy - купить кредиты
+/referral - реферальная программа
 /history - история генераций
 /help - помощь
+${ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID ? '\n👑 /admin - панель администратора' : ''}
     `;
 
-    await bot.sendMessage(chatId, welcomeText);
+    await sendAndRemember(chatId, welcomeText);
   } catch (error) {
     console.error('Ошибка в /start:', error);
     await bot.sendMessage(chatId, '❌ Произошла ошибка при инициализации.');
@@ -86,13 +166,30 @@ bot.onText(/\/balance/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
+    await deleteOldMessages(chatId);
+    
     const user = userQueries.getByTelegramId.get(chatId.toString());
     
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
-    await bot.sendMessage(chatId, `💎 Ваш баланс: ${user.tokens} токенов`);
+    const refCount = userQueries.countReferrals.get(user.id);
+    
+    const balanceText = `
+💎 *Ваша статистика*
+
+💰 Баланс: *${user.credits} кредитов*
+📊 Всего генераций: ${user.total_generations || 0}
+📉 Потрачено: ${user.total_spent_credits || 0} кредитов
+
+👥 Рефералы: ${refCount.count || 0}
+🎁 Бонусов заработано: ${user.referral_bonus_earned || 0} кредитов
+
+📅 Регистрация: ${new Date(user.created_at).toLocaleDateString('ru-RU')}
+    `;
+
+    await sendAndRemember(chatId, balanceText, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Ошибка в /balance:', error);
     await bot.sendMessage(chatId, '❌ Ошибка при получении баланса.');
@@ -103,6 +200,8 @@ bot.onText(/\/buy/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
+    await deleteOldMessages(chatId);
+    
     const user = userQueries.getByTelegramId.get(chatId.toString());
     
     if (!user) {
@@ -110,26 +209,30 @@ bot.onText(/\/buy/, async (msg) => {
     }
 
     const keyboard = {
-      inline_keyboard: TOKEN_PACKAGES.map(pkg => [{
-        text: `⭐ ${pkg.stars} Stars → ${pkg.tokens.toLocaleString('ru-RU')} ${pkg.description}`,
+      inline_keyboard: CREDIT_PACKAGES.map(pkg => [{
+        text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
         callback_data: `buy_${pkg.stars}`
       }])
     };
 
-    const priceInfo = `💰 *Магазин токенов*\n\n` +
-      `💎 Ваш баланс: ${user.tokens.toLocaleString('ru-RU')} токенов\n\n` +
-      `📊 Примерная стоимость операций:\n` +
-      `• Текст (короткий): ~50-100 токенов\n` +
-      `• Текст (длинный): ~200-500 токенов\n` +
-      `• Генерация изображения: ~1000-3000 токенов\n` +
-      `• Редактирование изображения: ~1500-4000 токенов\n\n` +
+    const priceInfo = `💰 *Магазин кредитов*\n\n` +
+      `💎 Ваш баланс: ${user.credits} кредитов\n\n` +
+      `📊 Стоимость операций:\n` +
+      `• Текст (короткий): ${PRICES.TEXT_SHORT} кредит\n` +
+      `• Текст (длинный): ${PRICES.TEXT_LONG} кредита\n` +
+      `• Генерация изображения: ${PRICES.IMAGE_GEN} кредитов (скоро)\n` +
+      `• Редактирование: ${PRICES.IMAGE_EDIT} кредитов (скоро)\n\n` +
       `🎁 Больше покупаете = больше бонусов!`;
 
-    await bot.sendMessage(
+    const sentMsg = await bot.sendMessage(
       chatId,
       priceInfo,
       { reply_markup: keyboard, parse_mode: 'Markdown' }
     );
+    
+    const messages = userLastMessages.get(chatId) || [];
+    messages.push(sentMsg.message_id);
+    userLastMessages.set(chatId, messages);
   } catch (error) {
     console.error('Ошибка в /buy:', error);
     await bot.sendMessage(chatId, '❌ Ошибка при отображении пакетов.');
@@ -296,6 +399,205 @@ bot.onText(/\/stats/, async (msg) => {
   }
 });
 
+bot.onText(/\/referral/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const user = userQueries.getByTelegramId.get(chatId.toString());
+    
+    if (!user) {
+      return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+    }
+
+    const referrals = userQueries.getReferrals.all(user.id);
+    const refCount = referrals.length;
+    
+    let referralText = `
+👥 *Реферальная программа*
+
+🔗 Ваша реферальная ссылка:
+\`t.me/${(await bot.getMe()).username}?start=${user.referral_code}\`
+
+💰 Вы получаете: *${REFERRAL_BONUS} кредитов* за каждого друга
+🎁 Ваш друг получает: *${FREE_CREDITS} кредитов* при регистрации
+
+📊 *Ваша статистика:*
+👥 Приглашено друзей: ${refCount}
+💎 Заработано кредитов: ${user.referral_bonus_earned || 0}
+    `;
+
+    if (referrals.length > 0) {
+      referralText += `\n\n🏆 *Ваши рефералы:*\n`;
+      referrals.slice(0, 10).forEach((ref, idx) => {
+        referralText += `${idx + 1}. @${ref.username || 'пользователь'} (${ref.total_generations || 0} генераций)\n`;
+      });
+      if (referrals.length > 10) {
+        referralText += `\n_...и еще ${referrals.length - 10}_`;
+      }
+    }
+
+    await sendAndRemember(chatId, referralText, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Ошибка в /referral:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка при получении реферальной информации.');
+  }
+});
+
+bot.onText(/\/admin/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  // Проверка прав админа
+  if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+    return await bot.sendMessage(chatId, '❌ У вас нет доступа к этой команде.');
+  }
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const adminText = `
+👑 *Панель администратора*
+
+Доступные команды:
+
+/adminstats - полная статистика
+/adminuser <telegram_id> - информация о пользователе
+/adminadd <telegram_id> <credits> - начислить кредиты
+/adminblock <telegram_id> - заблокировать пользователя
+/adminunblock <telegram_id> - разблокировать
+/adminbroadcast - рассылка (в разработке)
+
+📊 Быстрая статистика:
+Используйте /stats для просмотра общей статистики.
+    `;
+
+    await sendAndRemember(chatId, adminText, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Ошибка в /admin:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка.');
+  }
+});
+
+bot.onText(/\/adminuser\s+(\S+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const targetTelegramId = match[1];
+
+  if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+    return;
+  }
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    
+    if (!user) {
+      return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
+    }
+
+    const refCount = userQueries.countReferrals.get(user.id);
+    
+    const userInfo = `
+👤 *Информация о пользователе*
+
+📝 Username: @${user.username || 'нет'}
+🆔 Telegram ID: \`${user.telegram_id}\`
+💎 Кредиты: ${user.credits}
+📊 Генераций: ${user.total_generations || 0}
+📉 Потрачено: ${user.total_spent_credits || 0}
+👥 Рефералов: ${refCount.count || 0}
+🎁 Бонусов: ${user.referral_bonus_earned || 0}
+🔒 Заблокирован: ${user.is_blocked ? 'Да' : 'Нет'}
+📅 Регистрация: ${new Date(user.created_at).toLocaleString('ru-RU')}
+    `;
+
+    await sendAndRemember(chatId, userInfo, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Ошибка в /adminuser:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка.');
+  }
+});
+
+bot.onText(/\/adminadd\s+(\S+)\s+(\d+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const targetTelegramId = match[1];
+  const creditsToAdd = parseInt(match[2]);
+
+  if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+    return;
+  }
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    
+    if (!user) {
+      return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
+    }
+
+    userQueries.updateCredits.run(creditsToAdd, user.id);
+    transactionQueries.create.run(user.id, 'admin_bonus', creditsToAdd, 0, 'Начислено администратором');
+
+    await bot.sendMessage(targetTelegramId, `🎁 Вам начислено ${creditsToAdd} кредитов от администратора!`);
+    await sendAndRemember(chatId, `✅ Пользователю @${user.username} начислено ${creditsToAdd} кредитов`);
+  } catch (error) {
+    console.error('Ошибка в /adminadd:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка.');
+  }
+});
+
+bot.onText(/\/adminblock\s+(\S+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const targetTelegramId = match[1];
+
+  if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+    return;
+  }
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    
+    if (!user) {
+      return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
+    }
+
+    userQueries.setBlocked.run(1, user.id);
+    await sendAndRemember(chatId, `✅ Пользователь @${user.username} заблокирован`);
+  } catch (error) {
+    console.error('Ошибка в /adminblock:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка.');
+  }
+});
+
+bot.onText(/\/adminunblock\s+(\S+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const targetTelegramId = match[1];
+
+  if (!ADMIN_TELEGRAM_ID || chatId.toString() !== ADMIN_TELEGRAM_ID) {
+    return;
+  }
+
+  try {
+    await deleteOldMessages(chatId);
+    
+    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    
+    if (!user) {
+      return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
+    }
+
+    userQueries.setBlocked.run(0, user.id);
+    await sendAndRemember(chatId, `✅ Пользователь @${user.username} разблокирован`);
+  } catch (error) {
+    console.error('Ошибка в /adminunblock:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка.');
+  }
+});
+
 // ==================== ОБРАБОТКА ПЛАТЕЖЕЙ ====================
 
 bot.on('callback_query', async (query) => {
@@ -315,7 +617,7 @@ bot.on('callback_query', async (query) => {
       }
 
       await bot.answerCallbackQuery(query.id, { 
-        text: `💎 Ваш баланс: ${user.tokens.toLocaleString('ru-RU')} токенов`, 
+        text: `💎 Ваш баланс: ${user.credits} кредитов`, 
         show_alert: true 
       });
     } catch (error) {
@@ -324,7 +626,7 @@ bot.on('callback_query', async (query) => {
     }
   } else if (data.startsWith('buy_')) {
     const stars = parseInt(data.split('_')[1]);
-    const package_ = TOKEN_PACKAGES.find(p => p.stars === stars);
+    const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
 
     if (!package_) {
       return await bot.answerCallbackQuery(query.id, { text: '❌ Пакет не найден' });
@@ -334,7 +636,7 @@ bot.on('callback_query', async (query) => {
       // Отправляем инвойс для оплаты Stars
       await bot.sendInvoice(
         chatId,
-        `${package_.tokens.toLocaleString('ru-RU')} токенов для Nano Banana`,
+        `${package_.credits} кредитов для Nano Banana`,
         `Пакет: ${package_.label} | ${package_.description}`,
         `payload_${chatId}_${Date.now()}`,
         '', // provider_token пустой для Stars
@@ -386,33 +688,33 @@ bot.on('successful_payment', async (msg) => {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден. Используйте /start');
     }
 
-    const package_ = TOKEN_PACKAGES.find(p => p.stars === stars);
+    const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
     
     if (!package_) {
       console.error(`❌ Пакет не найден для ${stars} Stars`);
       return await bot.sendMessage(chatId, '❌ Пакет не найден.');
     }
 
-    // Начисляем токены
-    userQueries.updateTokens.run(package_.tokens, user.id);
+    // Начисляем кредиты
+    userQueries.updateCredits.run(package_.credits, user.id);
 
     // Записываем транзакцию
     transactionQueries.create.run(
       user.id,
       'purchase',
-      package_.tokens,
+      package_.credits,
       stars,
       `Покупка ${package_.label}`
     );
 
-    const newBalance = user.tokens + package_.tokens;
+    const newBalance = user.credits + package_.credits;
 
-    console.log(`✅ Токены начислены: ${package_.tokens} → баланс: ${newBalance}`);
+    console.log(`✅ Кредиты начислены: ${package_.credits} → баланс: ${newBalance}`);
 
     const successMessage = 
       `✅ *Платеж успешно обработан!*\n\n` +
-      `💎 Начислено: ${package_.tokens.toLocaleString('ru-RU')} токенов\n` +
-      `💎 Новый баланс: ${newBalance.toLocaleString('ru-RU')} токенов\n\n` +
+      `💎 Начислено: ${package_.credits} кредитов\n` +
+      `💎 Новый баланс: ${newBalance} кредитов\n\n` +
       `🎉 Спасибо за покупку!\n` +
       `Теперь вы можете генерировать еще больше контента.`;
 
@@ -422,7 +724,6 @@ bot.on('successful_payment', async (msg) => {
     const quickActions = {
       inline_keyboard: [
         [{ text: '🤖 Создать текст', switch_inline_query_current_chat: '' }],
-        [{ text: '🎨 Создать изображение', switch_inline_query_current_chat: 'нарисуй ' }],
         [{ text: '💎 Баланс', callback_data: 'check_balance' }]
       ]
     };
@@ -437,7 +738,7 @@ bot.on('successful_payment', async (msg) => {
     console.error('Ошибка обработки платежа:', error);
     await bot.sendMessage(
       chatId, 
-      '❌ Ошибка при начислении токенов. Пожалуйста, свяжитесь с поддержкой и сообщите код ошибки: PAY_ERR_' + Date.now()
+      '❌ Ошибка при начислении кредитов. Пожалуйста, свяжитесь с поддержкой и сообщите код ошибки: PAY_ERR_' + Date.now()
     );
   }
 });
@@ -467,19 +768,26 @@ bot.on('message', async (msg) => {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
+      // Проверяем блокировку
+      if (user.is_blocked) {
+        return await bot.sendMessage(chatId, '❌ Ваш аккаунт заблокирован. Обратитесь в поддержку.');
+      }
+      
       // Проверяем баланс
-      if (user.tokens <= 0) {
+      if (user.credits < PRICES.IMAGE_EDIT) {
         return await bot.sendMessage(
           chatId,
-          '❌ У вас недостаточно токенов!\n\nИспользуйте /buy для покупки токенов.'
+          `❌ Недостаточно кредитов!\n\nТребуется: ${PRICES.IMAGE_EDIT} кредитов\nУ вас: ${user.credits}\n\nИспользуйте /buy`
         );
       }
 
       await bot.sendChatAction(chatId, 'upload_photo');
       
       console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
-      await bot.sendMessage(chatId, '✏️ Редактирую изображение, подождите...');
+      await bot.sendMessage(chatId, '⚠️ Редактирование изображений временно недоступно. Gemini API пока не поддерживает эту функцию.');
+      return;
       
+      /* ВРЕМЕННО ОТКЛЮЧЕНО - Gemini API не поддерживает
       // Скачиваем фото (берём самое большое)
       const photo = msg.photo[msg.photo.length - 1];
       const fileLink = await bot.getFileLink(photo.file_id);
@@ -499,37 +807,18 @@ bot.on('message', async (msg) => {
       // Редактируем изображение
       const result = await imageService.editImage(imageBuffer, prompt);
       
-      // Проверяем токены
-      if (user.tokens < result.tokensUsed) {
-        return await bot.sendMessage(
-          chatId,
-          `❌ Недостаточно токенов.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
-        );
-      }
+      const creditsUsed = PRICES.IMAGE_EDIT;
       
-      // Списываем токены
-      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      // Списываем кредиты
+      userQueries.updateCredits.run(-creditsUsed, user.id);
+      userQueries.incrementGenerations.run(creditsUsed, user.id);
       
       // Сохраняем
-      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', result.tokensUsed);
-      transactionQueries.create.run(user.id, 'generation', -result.tokensUsed, 0, 'Редактирование изображения');
+      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit');
+      transactionQueries.create.run(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
       
-      const newBalance = user.tokens - result.tokensUsed;
-      
-      // Отправляем отредактированное изображение
-      try {
-        await bot.sendPhoto(chatId, result.imageBuffer, {
-          caption: `✏️ Изображение отредактировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-        });
-      } catch (photoError) {
-        console.error('Ошибка отправки фото:', photoError);
-        await bot.sendMessage(
-          chatId,
-          `✏️ Изображение отредактировано, но ошибка при отправке.\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-        );
-      }
-      
-      return; // Выходим, обработка завершена
+      const newBalance = user.credits - creditsUsed;
+      */ // Конец закомментированного кода редактирования
       
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
@@ -554,11 +843,16 @@ bot.on('message', async (msg) => {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
+    // Проверяем блокировку
+    if (user.is_blocked) {
+      return await bot.sendMessage(chatId, '❌ Ваш аккаунт заблокирован. Обратитесь в поддержку.');
+    }
+    
     // Проверяем баланс
-    if (user.tokens <= 0) {
+    if (user.credits <= 0) {
       return await bot.sendMessage(
         chatId,
-        '❌ У вас недостаточно токенов!\n\nИспользуйте /buy для покупки токенов.'
+        '❌ У вас недостаточно кредитов!\n\nИспользуйте /buy для покупки кредитов.'
       );
     }
 
@@ -566,88 +860,85 @@ bot.on('message', async (msg) => {
     const isImageRequest = ImageService.isImageRequest(prompt);
     
     if (isImageRequest) {
-      // Генерация изображения
+      // ВРЕМЕННО ОТКЛЮЧЕНО
+      return await bot.sendMessage(chatId, '⚠️ Генерация изображений временно недоступна. Gemini API пока не поддерживает эту функцию. Используйте текстовые запросы.');
+      
+      /* Генерация изображения
       await bot.sendChatAction(chatId, 'upload_photo');
       
       const imagePrompt = ImageService.extractImagePrompt(prompt);
       console.log(`🎨 Запрос на генерацию изображения: "${imagePrompt}"`);
       
-      const result = await imageService.generateImage(imagePrompt);
+      const creditsUsed = PRICES.IMAGE_GEN;
       
-      // Проверяем, хватит ли токенов
-      if (user.tokens < result.tokensUsed) {
+      // Проверяем баланс
+      if (user.credits < creditsUsed) {
         return await bot.sendMessage(
           chatId,
-          `❌ Недостаточно токенов.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+          `❌ Недостаточно кредитов.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
         );
       }
       
-      // Списываем токены
-      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      const result = await imageService.generateImage(imagePrompt);
+      
+      // Списываем кредиты
+      userQueries.updateCredits.run(-creditsUsed, user.id);
+      userQueries.incrementGenerations.run(creditsUsed, user.id);
       
       // Сохраняем генерацию
-      generationQueries.create.run(user.id, prompt, '[Изображение]', result.tokensUsed);
+      generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image');
       
       // Сохраняем транзакцию
       transactionQueries.create.run(
         user.id,
         'generation',
-        -result.tokensUsed,
+        -creditsUsed,
         0,
         'Генерация изображения'
       );
       
-      const newBalance = user.tokens - result.tokensUsed;
-      
-      // Отправляем изображение
-      try {
-        await bot.sendPhoto(chatId, result.imageBuffer, {
-          caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-        });
-      } catch (photoError) {
-        console.error('Ошибка отправки фото:', photoError);
-        console.error('Детали:', photoError.stack);
-        await bot.sendMessage(
-          chatId,
-          `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-        );
-      }
-      
+      const newBalance = user.credits - creditsUsed;
+      */ // Конец закомментированного кода генерации изображений
     } else {
       // Обычная генерация текста
       await bot.sendChatAction(chatId, 'typing');
       
       const result = await gemini.generate(prompt);
       
-      // Проверяем, хватит ли токенов
-      if (user.tokens < result.tokensUsed) {
+      // Определяем стоимость на основе длины ответа
+      const responseLength = result.text.length;
+      const creditsUsed = responseLength > 500 ? PRICES.TEXT_LONG : PRICES.TEXT_SHORT;
+      
+      // Проверяем, хватит ли кредитов
+      if (user.credits < creditsUsed) {
         return await bot.sendMessage(
           chatId,
-          `❌ Недостаточно токенов для этого запроса.\n\nТребуется: ${result.tokensUsed}\nДоступно: ${user.tokens}\n\nИспользуйте /buy`
+          `❌ Недостаточно кредитов для этого запроса.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
         );
       }
       
-      // Списываем токены
-      userQueries.updateTokens.run(-result.tokensUsed, user.id);
+      // Списываем кредиты
+      userQueries.updateCredits.run(-creditsUsed, user.id);
+      userQueries.incrementGenerations.run(creditsUsed, user.id);
       
       // Сохраняем генерацию
-      generationQueries.create.run(user.id, prompt, result.text, result.tokensUsed);
+      generationQueries.create.run(user.id, prompt, result.text, creditsUsed, 'text');
       
       // Сохраняем транзакцию
       transactionQueries.create.run(
         user.id,
         'generation',
-        -result.tokensUsed,
+        -creditsUsed,
         0,
         'Генерация текста'
       );
       
-      const newBalance = user.tokens - result.tokensUsed;
+      const newBalance = user.credits - creditsUsed;
       
       // Отправляем ответ
       await bot.sendMessage(
         chatId,
-        `${result.text}\n\n---\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+        `${result.text}\n\n---\n💎 Использовано: ${creditsUsed} ${creditsUsed === 1 ? 'кредит' : 'кредита/кредитов'}\n💎 Осталось: ${newBalance}`
       );
     }
 
