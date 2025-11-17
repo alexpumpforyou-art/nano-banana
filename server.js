@@ -190,12 +190,25 @@ app.get('/health', (req, res) => {
 // Диагностический endpoint - показывает доступные модели
 app.get('/api/debug/models', async (req, res) => {
   try {
-    const fetch = require('node-fetch');
+    const https = require('https');
     const apiKey = process.env.GEMINI_API_KEY;
     
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    const response = await fetch(url);
-    const data = await response.json();
+    
+    // Используем https.get вместо fetch
+    const data = await new Promise((resolve, reject) => {
+      https.get(url, (response) => {
+        let body = '';
+        response.on('data', chunk => body += chunk);
+        response.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }).on('error', reject);
+    });
     
     if (data.error) {
       return res.json({ 
