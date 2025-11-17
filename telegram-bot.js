@@ -323,22 +323,15 @@ bot.on('message', async (msg) => {
       
       // Отправляем изображение
       try {
-        // imageData может быть base64 или URL
-        if (result.imageData.startsWith('http')) {
-          await bot.sendPhoto(chatId, result.imageData, {
-            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-          });
-        } else {
-          // Если это base64 или другой формат
-          await bot.sendPhoto(chatId, Buffer.from(result.imageData, 'base64'), {
-            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
-          });
-        }
+        await bot.sendPhoto(chatId, result.imageBuffer, {
+          caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+        });
       } catch (photoError) {
         console.error('Ошибка отправки фото:', photoError);
+        console.error('Детали:', photoError.stack);
         await bot.sendMessage(
           chatId,
-          `🎨 Изображение сгенерировано, но не могу его отправить.\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
+          `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано токенов: ${result.tokensUsed}\n💎 Осталось: ${newBalance}`
         );
       }
       

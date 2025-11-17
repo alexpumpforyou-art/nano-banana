@@ -18,19 +18,45 @@ class ImageService {
     try {
       console.log(`🎨 Генерирую изображение: "${prompt}"`);
       
-      const result = await this.imageModel.generateContent(prompt);
+      // Генерируем изображение с правильной конфигурацией
+      const result = await this.imageModel.generateContent(prompt, {
+        generationConfig: {
+          response_modalities: ['IMAGE']
+        }
+      });
+      
       const response = await result.response;
       
-      // Получаем сгенерированное изображение
-      const imageData = response.text();
+      // Получаем изображение из ответа
+      let imageBuffer = null;
+      
+      // Проверяем разные возможные форматы ответа
+      if (response.candidates && response.candidates[0]) {
+        const candidate = response.candidates[0];
+        
+        if (candidate.content && candidate.content.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              // Изображение в base64
+              imageBuffer = Buffer.from(part.inlineData.data, 'base64');
+              console.log(`✅ Изображение получено (${part.inlineData.mimeType})`);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!imageBuffer) {
+        throw new Error('Изображение не найдено в ответе API');
+      }
       
       // Примерный подсчет токенов
-      const tokensUsed = Math.ceil(prompt.length / 4);
+      const tokensUsed = Math.ceil(prompt.length / 4) + 50; // +50 за генерацию изображения
 
-      console.log(`✅ Изображение сгенерировано успешно`);
+      console.log(`✅ Изображение сгенерировано успешно (${imageBuffer.length} bytes)`);
       
       return {
-        imageData,
+        imageBuffer,
         tokensUsed,
         success: true
       };
