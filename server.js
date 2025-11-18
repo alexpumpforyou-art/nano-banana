@@ -468,6 +468,95 @@ app.post('/api/admin/send-message', requireAdmin, async (req, res) => {
   }
 });
 
+// Массовая рассылка сообщений
+app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
+  try {
+    const { message, filters } = req.body;
+    
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Требуется message' });
+    }
+    
+    // Проверяем, что бот доступен
+    if (!telegramBot) {
+      return res.status(503).json({ success: false, error: 'Telegram бот не инициализирован' });
+    }
+    
+    // Формируем SQL запрос с фильтрами
+    let query = 'SELECT id, telegram_id, username, is_blocked FROM users WHERE telegram_id IS NOT NULL';
+    const params = [];
+    
+    // Применяем фильтры
+    if (filters) {
+      if (filters.onlyActive === true) {
+        query += ' AND is_blocked = 0';
+      }
+      if (filters.onlyBlocked === true) {
+        query += ' AND is_blocked = 1';
+      }
+      if (filters.minCredits !== undefined && filters.minCredits !== null) {
+        query += ' AND credits >= ?';
+        params.push(parseInt(filters.minCredits));
+      }
+      if (filters.maxCredits !== undefined && filters.maxCredits !== null) {
+        query += ' AND credits <= ?';
+        params.push(parseInt(filters.maxCredits));
+      }
+    }
+    
+    // Получаем список пользователей
+    const users = db.prepare(query).all(...params);
+    
+    if (users.length === 0) {
+      return res.status(400).json({ success: false, error: 'Нет пользователей, соответствующих фильтрам' });
+    }
+    
+    // Отправляем сообщения асинхронно с задержкой между запросами (чтобы не превысить лимиты Telegram)
+    const results = {
+      total: users.length,
+      sent: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    // Отправляем сообщения с задержкой 50ms между запросами (20 сообщений в секунду)
+    for (let i = 0; i < users.length; i++) {
+      const user = users[i];
+      
+      try {
+        const chatId = parseInt(user.telegram_id);
+        await telegramBot.sendMessage(chatId, message);
+        results.sent++;
+        
+        // Небольшая задержка между сообщениями
+        if (i < users.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          userId: user.id,
+          username: user.username || user.telegram_id,
+          error: error.message || 'Неизвестная ошибка'
+        });
+        
+        // Логируем ошибки, но продолжаем рассылку
+        console.error(`❌ Ошибка отправки пользователю ${user.username || user.telegram_id}:`, error.message);
+      }
+    }
+    
+    console.log(`📢 Массовая рассылка завершена: ${results.sent}/${results.total} отправлено`);
+    
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('Ошибка массовой рассылки:', error);
+    res.status(500).json({ success: false, error: error.message || 'Ошибка массовой рассылки' });
+  }
+});
+
 // Роут для HTML страницы админ-панели
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));

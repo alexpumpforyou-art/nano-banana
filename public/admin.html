@@ -533,7 +533,10 @@
     <div id="adminPanel" class="container">
         <header>
             <h1>🍌 Admin Panel - Nano Banana</h1>
-            <button class="logout-btn" onclick="logout()">Выйти</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-success" onclick="openBroadcastModal()" style="padding: 10px 20px; font-size: 14px;">📢 Массовая рассылка</button>
+                <button class="logout-btn" onclick="logout()">Выйти</button>
+            </div>
         </header>
 
         <div class="content">
@@ -694,6 +697,77 @@
                         <button class="btn btn-success" onclick="addCredits()">💰 Начислить</button>
                         <button class="btn" style="background: var(--gray); color: white;" onclick="closeAddCreditsModal()">Отмена</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Broadcast Modal -->
+    <div id="broadcastModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>📢 Массовая рассылка</h2>
+                <button class="close-btn" onclick="closeBroadcastModal()">Закрыть</button>
+            </div>
+            <div id="broadcastContent">
+                <div class="send-message-form">
+                    <div class="form-group">
+                        <label for="broadcastMessage">Сообщение для рассылки</label>
+                        <textarea id="broadcastMessage" placeholder="Введите сообщение для массовой рассылки..." required style="min-height: 150px;"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Фильтры получателей</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; padding: 15px; background: var(--background); border-radius: 10px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="filterOnlyActive" checked>
+                                <span>Только активные пользователи (не заблокированные)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="filterOnlyBlocked">
+                                <span>Только заблокированные пользователи</span>
+                            </label>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 5px;">
+                                    <span>Мин. кредитов:</span>
+                                    <input type="number" id="filterMinCredits" placeholder="Не ограничено" style="width: 100px; padding: 5px;">
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 5px;">
+                                    <span>Макс. кредитов:</span>
+                                    <input type="number" id="filterMaxCredits" placeholder="Не ограничено" style="width: 100px; padding: 5px;">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="broadcastPreview" style="padding: 15px; background: var(--background); border-radius: 10px; margin-bottom: 15px; display: none;">
+                        <strong>Предварительный просмотр:</strong>
+                        <div id="broadcastPreviewText" style="margin-top: 10px; color: var(--gray);"></div>
+                    </div>
+                    
+                    <div class="error-message" id="broadcastError" style="display: none;"></div>
+                    
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="startBroadcast()">📢 Начать рассылку</button>
+                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeBroadcastModal()">Отмена</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Progress Section -->
+            <div id="broadcastProgress" style="display: none; margin-top: 20px; padding: 20px; background: var(--background); border-radius: 10px;">
+                <h3>Прогресс рассылки</h3>
+                <div style="margin: 15px 0;">
+                    <div style="background: var(--light); border-radius: 10px; height: 30px; position: relative; overflow: hidden;">
+                        <div id="broadcastProgressBar" style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;"></div>
+                    </div>
+                    <div style="margin-top: 10px; text-align: center;">
+                        <span id="broadcastProgressText">0 / 0</span>
+                    </div>
+                </div>
+                <div id="broadcastResults" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 10px;">
+                    <h4>Результаты:</h4>
+                    <div id="broadcastResultsText"></div>
                 </div>
             </div>
         </div>
@@ -1054,6 +1128,7 @@
             const sendModal = document.getElementById('sendMessageModal');
             const imageModal = document.getElementById('imageModal');
             const creditsModal = document.getElementById('addCreditsModal');
+            const broadcastModal = document.getElementById('broadcastModal');
             if (event.target === modal) {
                 closeModal();
             }
@@ -1065,6 +1140,9 @@
             }
             if (event.target === creditsModal) {
                 closeAddCreditsModal();
+            }
+            if (event.target === broadcastModal) {
+                closeBroadcastModal();
             }
         }
 
@@ -1153,6 +1231,157 @@
             } finally {
                 addBtn.disabled = false;
                 addBtn.textContent = originalText;
+            }
+        }
+
+        // Broadcast functions
+        function openBroadcastModal() {
+            document.getElementById('broadcastModal').style.display = 'block';
+            document.getElementById('broadcastMessage').value = '';
+            document.getElementById('filterOnlyActive').checked = true;
+            document.getElementById('filterOnlyBlocked').checked = false;
+            document.getElementById('filterMinCredits').value = '';
+            document.getElementById('filterMaxCredits').value = '';
+            document.getElementById('broadcastError').style.display = 'none';
+            document.getElementById('broadcastPreview').style.display = 'none';
+            document.getElementById('broadcastProgress').style.display = 'none';
+            document.getElementById('broadcastResults').style.display = 'none';
+        }
+
+        function closeBroadcastModal() {
+            document.getElementById('broadcastModal').style.display = 'none';
+        }
+
+        async function startBroadcast() {
+            const message = document.getElementById('broadcastMessage').value.trim();
+            const errorDiv = document.getElementById('broadcastError');
+            const progressDiv = document.getElementById('broadcastProgress');
+            const resultsDiv = document.getElementById('broadcastResults');
+            const progressBar = document.getElementById('broadcastProgressBar');
+            const progressText = document.getElementById('broadcastProgressText');
+            const resultsText = document.getElementById('broadcastResultsText');
+
+            if (!message) {
+                errorDiv.textContent = 'Введите сообщение для рассылки';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Проверяем конфликтующие фильтры
+            const onlyActive = document.getElementById('filterOnlyActive').checked;
+            const onlyBlocked = document.getElementById('filterOnlyBlocked').checked;
+            
+            if (onlyActive && onlyBlocked) {
+                errorDiv.textContent = 'Нельзя выбрать одновременно "только активные" и "только заблокированные"';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Подтверждение
+            const totalUsers = document.getElementById('telegramUsers').textContent;
+            if (!confirm(`Вы уверены, что хотите отправить сообщение всем Telegram пользователям (${totalUsers})?\n\nЭто действие нельзя отменить.`)) {
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            progressDiv.style.display = 'block';
+            resultsDiv.style.display = 'none';
+            
+            // Собираем фильтры
+            const filters = {
+                onlyActive: onlyActive,
+                onlyBlocked: onlyBlocked
+            };
+            
+            const minCredits = document.getElementById('filterMinCredits').value.trim();
+            const maxCredits = document.getElementById('filterMaxCredits').value.trim();
+            
+            if (minCredits) {
+                filters.minCredits = parseInt(minCredits);
+            }
+            if (maxCredits) {
+                filters.maxCredits = parseInt(maxCredits);
+            }
+
+            // Начинаем рассылку
+            const startBtn = event.target;
+            const originalText = startBtn.textContent;
+            startBtn.disabled = true;
+            startBtn.textContent = 'Рассылка начата...';
+
+            try {
+                const response = await fetch('/api/admin/broadcast', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        filters: filters
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const { results } = data;
+                    
+                    // Обновляем прогресс
+                    const percentage = (results.sent / results.total) * 100;
+                    progressBar.style.width = percentage + '%';
+                    progressBar.textContent = Math.round(percentage) + '%';
+                    progressText.textContent = `${results.sent} / ${results.total} отправлено`;
+                    
+                    // Показываем результаты
+                    resultsDiv.style.display = 'block';
+                    let resultsHtml = `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 10px;">
+                            <div style="padding: 15px; background: var(--success); color: white; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold;">${results.sent}</div>
+                                <div>Отправлено</div>
+                            </div>
+                            <div style="padding: 15px; background: var(--danger); color: white; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold;">${results.failed}</div>
+                                <div>Ошибок</div>
+                            </div>
+                            <div style="padding: 15px; background: var(--info); color: white; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold;">${results.total}</div>
+                                <div>Всего</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (results.errors && results.errors.length > 0) {
+                        resultsHtml += `
+                            <div style="margin-top: 15px;">
+                                <strong>Ошибки (первые 10):</strong>
+                                <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                                    ${results.errors.slice(0, 10).map(err => `
+                                        <div style="padding: 8px; background: var(--background); border-radius: 5px; margin-bottom: 5px; font-size: 12px;">
+                                            <strong>${err.username}</strong>: ${err.error}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    resultsText.innerHTML = resultsHtml;
+                    
+                    alert(`✅ Рассылка завершена!\n\nОтправлено: ${results.sent}\nОшибок: ${results.failed}\nВсего: ${results.total}`);
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка массовой рассылки';
+                    errorDiv.style.display = 'block';
+                    progressDiv.style.display = 'none';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу: ' + error.message;
+                errorDiv.style.display = 'block';
+                progressDiv.style.display = 'none';
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = originalText;
             }
         }
 
