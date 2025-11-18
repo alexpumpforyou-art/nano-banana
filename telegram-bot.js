@@ -146,6 +146,16 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
       const botInfo = await bot.getMe();
       welcomeText += `\n🔗 Ваша реферальная ссылка:\nt.me/${botInfo.username}?start=${user.referral_code}`;
     }
+    
+    // Конвертируем Markdown форматирование в HTML для безопасности
+    // Заменяем *текст* на <b>текст</b> и экранируем HTML символы
+    welcomeText = welcomeText
+      .replace(/&/g, '&amp;')   // Экранируем &
+      .replace(/</g, '&lt;')    // Экранируем <
+      .replace(/>/g, '&gt;')    // Экранируем >
+      .replace(/\*([^*]+)\*/g, '<b>$1</b>')  // *текст* -> <b>текст</b>
+      .replace(/_([^_]+)_/g, '<i>$1</i>')   // _текст_ -> <i>текст</i>
+      .replace(/`([^`]+)`/g, '<code>$1</code>'); // `текст` -> <code>текст</code>
 
     const keyboard = {
       inline_keyboard: [
@@ -177,7 +187,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
         await bot.sendPhoto(chatId, imageBuffer, {
           caption: welcomeText,
           reply_markup: keyboard,
-          parse_mode: 'Markdown'
+          parse_mode: 'HTML'
         });
         return; // Выходим, сообщение уже отправлено
       } catch (photoError) {
@@ -186,7 +196,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
       }
     }
 
-    await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'Markdown' });
+    await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'HTML' });
   } catch (error) {
     console.error('Ошибка в /start:', error);
     await bot.sendMessage(chatId, '❌ Произошла ошибка при инициализации.');
@@ -1167,14 +1177,24 @@ bot.on('callback_query', async (query) => {
       
       const user = userQueries.getByTelegramId.get(chatId.toString());
       
-      const welcomeText = `
-🍌 С возвращением в Nano Banana!
-
-💎 Ваш баланс: *${user.credits} кредитов*
-📊 Генераций: ${user.total_generations || 0}
-
-📝 Отправьте мне текст для генерации или выберите действие:
-      `;
+      // Используем динамический контент приветствия
+      const welcomeContent = contentQueries.getByType.get('welcome');
+      let welcomeText = welcomeContent?.text || `🍌 С возвращением в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:`;
+      
+      // Заменяем переменные
+      welcomeText = welcomeText
+        .replace(/{credits}/g, user.credits)
+        .replace(/{generations}/g, user.total_generations || 0)
+        .replace(/{username}/g, user.username || 'пользователь');
+      
+      // Конвертируем Markdown в HTML для безопасности
+      welcomeText = welcomeText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+        .replace(/_([^_]+)_/g, '<i>$1</i>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
 
       const keyboard = {
         inline_keyboard: [
@@ -1198,8 +1218,8 @@ bot.on('callback_query', async (query) => {
           { text: '👑 Админ-панель', callback_data: 'menu_admin' }
         ]);
       }
-
-      await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'Markdown' });
+      
+      await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'HTML' });
     } catch (error) {
       console.error('Ошибка menu_back:', error);
     }
@@ -1600,8 +1620,8 @@ bot.on('message', async (msg) => {
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
       
-      // Сохраняем генерацию
-      generationQueries.create.run(user.id, prompt, result.text, creditsUsed, 'text');
+      // Сохраняем генерацию (image_data = null для текста)
+      generationQueries.create.run(user.id, prompt, result.text, creditsUsed, 'text', null);
       
       // Сохраняем транзакцию
       transactionQueries.create.run(
