@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { userQueries, transactionQueries, generationQueries, referralQueries, generateReferralCode } = require('./database');
+const { userQueries, transactionQueries, generationQueries, referralQueries, contentQueries, generateReferralCode } = require('./database');
 const GeminiService = require('./gemini-service');
 const ImageService = require('./image-service');
 
@@ -131,15 +131,21 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
       }
     }
 
-    const welcomeText = `
-🍌 ${isNewUser ? 'Добро пожаловать' : 'С возвращением'} в Nano Banana!
-
-💎 Ваш баланс: *${user.credits} кредитов*
-📊 Генераций: ${user.total_generations || 0}
-${user.referral_code ? `\n🔗 Пригласите друзей и получите бонусы!` : ''}
-
-📝 Отправьте мне текст для генерации или выберите действие:
-    `;
+    // Получаем динамический контент приветствия
+    let welcomeContent = contentQueries.getByType.get('welcome');
+    let welcomeText = welcomeContent?.text || `🍌 ${isNewUser ? 'Добро пожаловать' : 'С возвращением'} в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:`;
+    
+    // Заменяем переменные
+    welcomeText = welcomeText
+      .replace(/{credits}/g, user.credits)
+      .replace(/{generations}/g, user.total_generations || 0)
+      .replace(/{username}/g, username);
+    
+    // Добавляем реферальную ссылку если есть
+    if (user.referral_code) {
+      const botInfo = await bot.getMe();
+      welcomeText += `\n🔗 Ваша реферальная ссылка:\nt.me/${botInfo.username}?start=${user.referral_code}`;
+    }
 
     const keyboard = {
       inline_keyboard: [
@@ -162,6 +168,22 @@ ${user.referral_code ? `\n🔗 Пригласите друзей и получи
       keyboard.inline_keyboard.push([
         { text: '👑 Админ-панель', callback_data: 'menu_admin' }
       ]);
+    }
+
+    // Отправляем изображение если есть
+    if (welcomeContent?.image_data) {
+      try {
+        const imageBuffer = Buffer.from(welcomeContent.image_data, 'base64');
+        await bot.sendPhoto(chatId, imageBuffer, {
+          caption: welcomeText,
+          reply_markup: keyboard,
+          parse_mode: 'Markdown'
+        });
+        return; // Выходим, сообщение уже отправлено
+      } catch (photoError) {
+        console.error('Ошибка отправки фото приветствия:', photoError);
+        // Продолжаем отправку текста если фото не отправилось
+      }
     }
 
     await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'Markdown' });

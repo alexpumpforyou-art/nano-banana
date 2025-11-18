@@ -132,6 +132,48 @@ function initDatabase() {
     )
   `);
 
+  // Таблица контента для меню и приветствий
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      title TEXT,
+      text TEXT,
+      image_data TEXT,
+      order_index INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  
+  // Создаем индексы для быстрого поиска
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_content_type ON content(type)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_content_active ON content(is_active)`);
+  } catch (e) { /* индексы уже существуют */ }
+  
+  // Инициализируем дефолтный контент если его нет
+  try {
+    const existingWelcome = db.prepare('SELECT COUNT(*) as count FROM content WHERE type = ?').get('welcome');
+    if (existingWelcome.count === 0) {
+      db.prepare(`
+        INSERT INTO content (type, title, text, order_index, is_active)
+        VALUES ('welcome', 'Приветствие', '🍌 Добро пожаловать в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:', 0, 1)
+      `).run();
+    }
+    
+    const existingMenu = db.prepare('SELECT COUNT(*) as count FROM content WHERE type = ?').get('menu');
+    if (existingMenu.count === 0) {
+      db.prepare(`
+        INSERT INTO content (type, title, text, order_index, is_active)
+        VALUES ('menu', 'Меню', '📋 Главное меню', 0, 1)
+      `).run();
+    }
+  } catch (e) {
+    console.log('ℹ️ Дефолтный контент уже существует или ошибка создания');
+  }
+
   console.log('✅ База данных инициализирована');
 }
 
@@ -310,6 +352,49 @@ const referralQueries = {
   `),
 };
 
+// Функции для работы с контентом
+const contentQueries = {
+  // Получить контент по типу
+  getByType: db.prepare(`
+    SELECT * FROM content 
+    WHERE type = ? AND is_active = 1 
+    ORDER BY order_index ASC, created_at ASC 
+    LIMIT 1
+  `),
+  
+  // Получить все контенты по типу (для админ-панели)
+  getAllByType: db.prepare(`
+    SELECT * FROM content 
+    WHERE type = ? 
+    ORDER BY order_index ASC, created_at DESC
+  `),
+  
+  // Получить все контенты
+  getAll: db.prepare(`
+    SELECT * FROM content 
+    ORDER BY type ASC, order_index ASC, created_at DESC
+  `),
+  
+  // Получить контент по ID
+  getById: db.prepare('SELECT * FROM content WHERE id = ?'),
+  
+  // Создать контент
+  create: db.prepare(`
+    INSERT INTO content (type, title, text, image_data, order_index, is_active)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  
+  // Обновить контент
+  update: db.prepare(`
+    UPDATE content 
+    SET title = ?, text = ?, image_data = ?, order_index = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `),
+  
+  // Удалить контент
+  delete: db.prepare('DELETE FROM content WHERE id = ?'),
+};
+
 module.exports = {
   db,
   initDatabase,
@@ -318,5 +403,6 @@ module.exports = {
   transactionQueries,
   generationQueries,
   referralQueries,
+  contentQueries,
 };
 

@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const { db, userQueries, transactionQueries, generationQueries } = require('./database');
+const { db, userQueries, transactionQueries, generationQueries, contentQueries } = require('./database');
 const GeminiService = require('./gemini-service');
 
 // Инициализация
@@ -554,6 +554,102 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Ошибка массовой рассылки:', error);
     res.status(500).json({ success: false, error: error.message || 'Ошибка массовой рассылки' });
+  }
+});
+
+// ==================== УПРАВЛЕНИЕ КОНТЕНТОМ ====================
+
+// Получить весь контент (для админ-панели)
+app.get('/api/admin/content', requireAdmin, (req, res) => {
+  try {
+    const content = contentQueries.getAll.all();
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error('Ошибка получения контента:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Получить контент по типу
+app.get('/api/admin/content/:type', requireAdmin, (req, res) => {
+  try {
+    const { type } = req.params;
+    const content = contentQueries.getAllByType.all(type);
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error('Ошибка получения контента:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Создать или обновить контент
+app.post('/api/admin/content', requireAdmin, (req, res) => {
+  try {
+    const { id, type, title, text, image_data, order_index, is_active } = req.body;
+    
+    if (!type) {
+      return res.status(400).json({ success: false, error: 'Требуется type' });
+    }
+    
+    if (id) {
+      // Обновление существующего контента
+      contentQueries.update.run(
+        title || null,
+        text || null,
+        image_data || null,
+        order_index || 0,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+        id
+      );
+      
+      const updated = contentQueries.getById.get(id);
+      res.json({
+        success: true,
+        message: 'Контент обновлен',
+        content: updated
+      });
+    } else {
+      // Создание нового контента
+      const result = contentQueries.create.run(
+        type,
+        title || null,
+        text || null,
+        image_data || null,
+        order_index || 0,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1
+      );
+      
+      const created = contentQueries.getById.get(result.lastInsertRowid);
+      res.json({
+        success: true,
+        message: 'Контент создан',
+        content: created
+      });
+    }
+  } catch (error) {
+    console.error('Ошибка сохранения контента:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Удалить контент
+app.delete('/api/admin/content/:id', requireAdmin, (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    contentQueries.delete.run(id);
+    res.json({
+      success: true,
+      message: 'Контент удален'
+    });
+  } catch (error) {
+    console.error('Ошибка удаления контента:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
