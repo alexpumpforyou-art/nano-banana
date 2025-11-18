@@ -626,12 +626,13 @@
                                     <th>Тип</th>
                                     <th>Кредитов</th>
                                     <th>Дата</th>
+                                    <th>Результат</th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="requestsTableBody">
                                 <tr>
-                                    <td colspan="7" class="loading">Загрузка...</td>
+                                    <td colspan="8" class="loading">Загрузка...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -650,6 +651,50 @@
             </div>
             <div id="userModalContent">
                 <div class="loading">Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal">
+        <div class="modal-content" style="max-width: 90%; text-align: center;">
+            <div class="modal-header">
+                <h2>Просмотр изображения</h2>
+                <button class="close-btn" onclick="closeImageModal()">Закрыть</button>
+            </div>
+            <div style="padding: 20px;">
+                <img id="modalImage" src="" style="max-width: 100%; max-height: 80vh; border-radius: 10px;" alt="Изображение">
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Credits Modal -->
+    <div id="addCreditsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Начислить кредиты</h2>
+                <button class="close-btn" onclick="closeAddCreditsModal()">Закрыть</button>
+            </div>
+            <div id="addCreditsContent">
+                <div class="send-message-form">
+                    <div class="form-group">
+                        <label>Пользователь</label>
+                        <div id="creditsRecipient" style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="creditsAmount">Количество кредитов</label>
+                        <input type="number" id="creditsAmount" placeholder="Введите количество (можно отрицательное для списания)" required style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                    </div>
+                    <div class="form-group">
+                        <label for="creditsDescription">Описание (необязательно)</label>
+                        <input type="text" id="creditsDescription" placeholder="Причина начисления..." style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                    </div>
+                    <div class="error-message" id="addCreditsError" style="display: none;"></div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="addCredits()">💰 Начислить</button>
+                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeAddCreditsModal()">Отмена</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -827,6 +872,7 @@
                         <td>${regDate}</td>
                         <td>
                             <span class="user-link" onclick="showUserDetails(${user.id})">Подробнее</span>
+                            | <span class="user-link" style="color: var(--info);" onclick="openAddCredits(${user.id}, '${(user.username || user.telegram_id || 'Пользователь').replace(/'/g, "\\'")}', ${user.credits || 0})">💰 Кредиты</span>
                             ${user.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
                         </td>
                     </tr>
@@ -859,9 +905,12 @@
                     
                     content.innerHTML = `
                         <div class="modal-section">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                                 <h3 style="margin: 0;">Основная информация</h3>
-                                ${user.telegram_id ? `<button class="btn btn-success" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать пользователю</button>` : '<span style="color: var(--gray);">Web пользователь (нет Telegram)</span>'}
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn btn-success" onclick="openAddCredits(${user.id}, '${(user.username || user.telegram_id || 'Пользователь').replace(/'/g, "\\'")}', ${user.credits || 0})">💰 Начислить кредиты</button>
+                                    ${user.telegram_id ? `<button class="btn btn-success" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</button>` : ''}
+                                </div>
                             </div>
                             <div class="info-grid">
                                 <div class="info-item">
@@ -929,19 +978,25 @@
                             <h3>Генерации (${generations.length})</h3>
                             ${generations.length === 0 
                                 ? '<div class="empty-state"><h3>Нет генераций</h3></div>'
-                                : generations.slice(0, 10).map(gen => `
+                                : generations.slice(0, 10).map(gen => {
+                                    const hasImage = gen.image_data;
+                                    const imageHtml = hasImage 
+                                        ? `<div style="margin-top: 10px;"><img src="data:image/png;base64,${gen.image_data}" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${gen.image_data}')" title="Нажмите для увеличения"></div>`
+                                        : '';
+                                    return `
                                     <div class="history-item">
                                         <div class="header">
                                             <span class="badge badge-info">${gen.type || 'text'}</span>
                                             <span>${new Date(gen.created_at).toLocaleString('ru-RU')}</span>
                                         </div>
                                         <div class="prompt">${gen.prompt || '-'}</div>
-                                        <div class="preview">${gen.response_preview || '-'}...</div>
+                                        ${hasImage ? imageHtml : `<div class="preview">${gen.response_preview || '-'}...</div>`}
                                         <div style="margin-top: 5px; color: var(--gray); font-size: 12px;">
                                             Использовано кредитов: ${gen.credits_used || 0}
                                         </div>
                                     </div>
-                                `).join('')
+                                `;
+                                }).join('')
                             }
                         </div>
 
@@ -997,11 +1052,107 @@
         window.onclick = function(event) {
             const modal = document.getElementById('userModal');
             const sendModal = document.getElementById('sendMessageModal');
+            const imageModal = document.getElementById('imageModal');
+            const creditsModal = document.getElementById('addCreditsModal');
             if (event.target === modal) {
                 closeModal();
             }
             if (event.target === sendModal) {
                 closeSendMessageModal();
+            }
+            if (event.target === imageModal) {
+                closeImageModal();
+            }
+            if (event.target === creditsModal) {
+                closeAddCreditsModal();
+            }
+        }
+
+        // Image modal functions
+        function showImageModal(imageSrc) {
+            document.getElementById('modalImage').src = imageSrc;
+            document.getElementById('imageModal').style.display = 'block';
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        // Add credits functions
+        let currentCreditsUserId = null;
+        function openAddCredits(userId, username, currentCredits) {
+            currentCreditsUserId = userId;
+            const modal = document.getElementById('addCreditsModal');
+            const recipientDiv = document.getElementById('creditsRecipient');
+            recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})<br><small>Текущий баланс: ${currentCredits} кредитов</small>`;
+            document.getElementById('creditsAmount').value = '';
+            document.getElementById('creditsDescription').value = '';
+            document.getElementById('addCreditsError').style.display = 'none';
+            modal.style.display = 'block';
+        }
+
+        function closeAddCreditsModal() {
+            document.getElementById('addCreditsModal').style.display = 'none';
+            currentCreditsUserId = null;
+        }
+
+        async function addCredits() {
+            const creditsAmount = parseInt(document.getElementById('creditsAmount').value);
+            const description = document.getElementById('creditsDescription').value.trim();
+            const errorDiv = document.getElementById('addCreditsError');
+
+            if (!creditsAmount || isNaN(creditsAmount) || creditsAmount === 0) {
+                errorDiv.textContent = 'Введите количество кредитов (не равное нулю)';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!currentCreditsUserId) {
+                errorDiv.textContent = 'Ошибка: не выбран пользователь';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            const addBtn = event.target;
+            const originalText = addBtn.textContent;
+            addBtn.disabled = true;
+            addBtn.textContent = 'Начисление...';
+
+            try {
+                const response = await fetch('/api/admin/add-credits', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        userId: currentCreditsUserId,
+                        credits: creditsAmount,
+                        description: description || undefined
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`✅ ${data.message}\n\nНовый баланс: ${data.user.credits} кредитов`);
+                    closeAddCreditsModal();
+                    // Обновляем данные
+                    if (document.getElementById('userModal').style.display === 'block') {
+                        showUserDetails(currentCreditsUserId);
+                    }
+                    loadData(); // Обновляем список пользователей
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка начисления кредитов';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу';
+                errorDiv.style.display = 'block';
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = originalText;
             }
         }
 
@@ -1031,7 +1182,7 @@
                     const requests = data.requests;
                     
                     if (requests.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Нет запросов</h3></td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет запросов</h3></td></tr>';
                         return;
                     }
 
@@ -1048,6 +1199,10 @@
                             typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
                         }
                         
+                        const imagePreview = req.image_data 
+                            ? `<img src="data:image/png;base64,${req.image_data}" style="max-width: 150px; max-height: 150px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${req.image_data}')" title="Нажмите для увеличения">`
+                            : '-';
+                        
                         return `
                             <tr>
                                 <td>${req.id}</td>
@@ -1057,6 +1212,9 @@
                                 <td>${req.credits_used || 0}</td>
                                 <td>${date}</td>
                                 <td>
+                                    ${imagePreview}
+                                </td>
+                                <td>
                                     <span class="user-link" onclick="showUserDetails(${req.user_id})">👤 Профиль</span>
                                     ${req.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${req.user_id}, '${(req.username || req.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
                                 </td>
@@ -1065,7 +1223,7 @@
                     }).join('');
                 }
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
             }
         }
 

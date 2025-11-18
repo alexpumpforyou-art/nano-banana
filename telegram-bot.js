@@ -1445,8 +1445,9 @@ bot.on('message', async (msg) => {
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
       
-      // Сохраняем
-      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit');
+      // Сохраняем с изображением в base64
+      const imageBase64 = result.imageBuffer.toString('base64');
+      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit', imageBase64);
       transactionQueries.create.run(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
       
       const newBalance = user.credits - creditsUsed;
@@ -1528,8 +1529,9 @@ bot.on('message', async (msg) => {
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
       
-      // Сохраняем генерацию
-      generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image');
+      // Сохраняем генерацию с изображением в base64
+      const imageBase64 = result.imageBuffer.toString('base64');
+      generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
       
       // Сохраняем транзакцию
       transactionQueries.create.run(

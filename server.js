@@ -347,6 +347,7 @@ app.get('/api/admin/requests', requireAdmin, (req, res) => {
         g.response,
         g.credits_used,
         g.type,
+        g.image_data,
         g.created_at,
         u.id as user_id,
         u.username,
@@ -365,6 +366,58 @@ app.get('/api/admin/requests', requireAdmin, (req, res) => {
   } catch (error) {
     console.error('Ошибка получения запросов:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Начислить кредиты пользователю
+app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
+  try {
+    const { userId, credits, description } = req.body;
+    
+    if (!userId || credits === undefined || credits === null) {
+      return res.status(400).json({ success: false, error: 'Требуется userId и credits' });
+    }
+    
+    const creditsAmount = parseInt(credits);
+    if (isNaN(creditsAmount) || creditsAmount === 0) {
+      return res.status(400).json({ success: false, error: 'Кредиты должны быть числом, не равным нулю' });
+    }
+    
+    // Получаем пользователя
+    const user = userQueries.getAdminUserById.get(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+    }
+    
+    // Начисляем кредиты
+    userQueries.updateCredits.run(creditsAmount, userId);
+    
+    // Сохраняем транзакцию
+    const txDescription = description || `Админ начислил ${creditsAmount > 0 ? '+' : ''}${creditsAmount} кредитов`;
+    transactionQueries.create.run(
+      userId,
+      'admin_add',
+      creditsAmount,
+      0,
+      txDescription
+    );
+    
+    // Получаем обновленного пользователя
+    const updatedUser = userQueries.getAdminUserById.get(userId);
+    
+    console.log(`💰 Админ начислил ${creditsAmount} кредитов пользователю ${user.username || user.telegram_id || user.id}`);
+    
+    res.json({
+      success: true,
+      message: `Начислено ${creditsAmount > 0 ? '+' : ''}${creditsAmount} кредитов`,
+      user: {
+        id: updatedUser.id,
+        credits: updatedUser.credits
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка начисления кредитов:', error);
+    res.status(500).json({ success: false, error: error.message || 'Ошибка начисления кредитов' });
   }
 });
 

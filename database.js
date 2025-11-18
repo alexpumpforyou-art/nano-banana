@@ -108,10 +108,16 @@ function initDatabase() {
       response TEXT,
       credits_used INTEGER,
       type TEXT DEFAULT 'text',
+      image_data TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
+  
+  // Миграция: добавляем колонку image_data если её нет
+  try {
+    db.exec(`ALTER TABLE generations ADD COLUMN image_data TEXT`);
+  } catch (e) { /* колонка уже существует */ }
   
   // Таблица рефералов (для детальной статистики)
   db.exec(`
@@ -260,8 +266,8 @@ const transactionQueries = {
 // Функции для работы с генерациями
 const generationQueries = {
   create: db.prepare(`
-    INSERT INTO generations (user_id, prompt, response, credits_used, type)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO generations (user_id, prompt, response, credits_used, type, image_data)
+    VALUES (?, ?, ?, ?, ?, ?)
   `),
 
   getHistory: db.prepare(`
@@ -274,7 +280,7 @@ const generationQueries = {
   
   // АДМИН-ПАНЕЛЬ: Получить все генерации пользователя
   getAllByUserId: db.prepare(`
-    SELECT id, prompt, SUBSTR(response, 1, 200) as response_preview, credits_used, type, created_at
+    SELECT id, prompt, SUBSTR(response, 1, 200) as response_preview, credits_used, type, image_data, created_at
     FROM generations
     WHERE user_id = ?
     ORDER BY created_at DESC
