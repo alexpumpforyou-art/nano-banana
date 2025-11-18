@@ -4,13 +4,17 @@ class GeminiService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.apiKey = apiKey;
-    // Список моделей для автоматического перебора (начинаем с менее популярных)
+    // Список моделей для автоматического перебора (приоритет: Gemini 3 → Gemini 2.5 → Gemini 2.0)
     this.modelsToTry = [
-      'gemini-2.0-flash',          // Стабильная, быстрая
-      'gemini-flash-latest',       // Автоматически последняя
-      'gemini-2.5-flash',          // Новая (может быть перегружена)
+      'gemini-3.0-flash',          // Gemini 3 - новая версия
+      'gemini-3.5-flash',          // Gemini 3.5 - улучшенная версия
+      'gemini-3.0-pro',            // Gemini 3 Pro - качественная версия
+      'gemini-flash-latest',       // Автоматически последняя версия
+      'gemini-2.5-flash',          // Gemini 2.5 - стабильная
+      'gemini-2.5-pro',            // Gemini 2.5 Pro
+      'gemini-2.0-flash',          // Gemini 2.0 - fallback
       'gemini-2.0-flash-lite',     // Легкая версия
-      'gemini-2.5-pro'             // Качественная
+      'gemini-pro-latest'          // Последняя Pro версия
     ];
     this.currentModelIndex = 0;
     this.model = this.genAI.getGenerativeModel({ 
