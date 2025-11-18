@@ -435,6 +435,82 @@
             font-size: 1.5em;
             margin-bottom: 10px;
         }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--light);
+        }
+
+        .tab-btn {
+            padding: 15px 30px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray);
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            color: var(--dark);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Send Message Modal */
+        .send-message-form {
+            margin-top: 20px;
+        }
+
+        .send-message-form textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid var(--light);
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 150px;
+            margin-bottom: 15px;
+        }
+
+        .send-message-form textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .send-message-form .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #27AE60;
+        }
+
+        .requests-table-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px var(--shadow);
+        }
     </style>
 </head>
 <body>
@@ -489,19 +565,27 @@
                 </div>
             </div>
 
-            <!-- Controls -->
-            <div class="controls">
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="🔍 Поиск по username, ID, referral code...">
-                </div>
-                <button class="filter-btn active" onclick="setFilter('all')">Все</button>
-                <button class="filter-btn" onclick="setFilter('telegram')">Telegram</button>
-                <button class="filter-btn" onclick="setFilter('web')">Web</button>
-                <button class="filter-btn" onclick="setFilter('blocked')">Заблокированные</button>
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('users')">👥 Пользователи</button>
+                <button class="tab-btn" onclick="switchTab('requests')">📝 Запросы</button>
             </div>
 
-            <!-- Users Table -->
-            <div class="users-table-container">
+            <!-- Users Tab -->
+            <div id="usersTab" class="tab-content active">
+                <!-- Controls -->
+                <div class="controls">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="🔍 Поиск по username, ID, referral code...">
+                    </div>
+                    <button class="filter-btn active" onclick="setFilter('all')">Все</button>
+                    <button class="filter-btn" onclick="setFilter('telegram')">Telegram</button>
+                    <button class="filter-btn" onclick="setFilter('web')">Web</button>
+                    <button class="filter-btn" onclick="setFilter('blocked')">Заблокированные</button>
+                </div>
+
+                <!-- Users Table -->
+                <div class="users-table-container">
                 <div class="table-wrapper">
                     <table>
                         <thead>
@@ -527,6 +611,33 @@
                     </table>
                 </div>
             </div>
+            </div>
+
+            <!-- Requests Tab -->
+            <div id="requestsTab" class="tab-content">
+                <div class="requests-table-container">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Пользователь</th>
+                                    <th>Запрос (промпт)</th>
+                                    <th>Тип</th>
+                                    <th>Кредитов</th>
+                                    <th>Дата</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requestsTableBody">
+                                <tr>
+                                    <td colspan="7" class="loading">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -539,6 +650,33 @@
             </div>
             <div id="userModalContent">
                 <div class="loading">Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Send Message Modal -->
+    <div id="sendMessageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Отправить сообщение пользователю</h2>
+                <button class="close-btn" onclick="closeSendMessageModal()">Закрыть</button>
+            </div>
+            <div id="sendMessageContent">
+                <div class="send-message-form">
+                    <div class="form-group">
+                        <label>Получатель</label>
+                        <div id="messageRecipient" style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="messageText">Сообщение</label>
+                        <textarea id="messageText" placeholder="Введите сообщение для пользователя..." required></textarea>
+                    </div>
+                    <div class="error-message" id="sendMessageError" style="display: none;"></div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="sendMessage()">📤 Отправить</button>
+                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeSendMessageModal()">Отмена</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -687,7 +825,10 @@
                         <td>${user.referrals_count || 0}</td>
                         <td>${status}</td>
                         <td>${regDate}</td>
-                        <td><span class="user-link" onclick="showUserDetails(${user.id})">Подробнее</span></td>
+                        <td>
+                            <span class="user-link" onclick="showUserDetails(${user.id})">Подробнее</span>
+                            ${user.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -718,7 +859,10 @@
                     
                     content.innerHTML = `
                         <div class="modal-section">
-                            <h3>Основная информация</h3>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h3 style="margin: 0;">Основная информация</h3>
+                                ${user.telegram_id ? `<button class="btn btn-success" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать пользователю</button>` : '<span style="color: var(--gray);">Web пользователь (нет Telegram)</span>'}
+                            </div>
                             <div class="info-grid">
                                 <div class="info-item">
                                     <label>ID</label>
@@ -852,8 +996,148 @@
         // Close modal on outside click
         window.onclick = function(event) {
             const modal = document.getElementById('userModal');
+            const sendModal = document.getElementById('sendMessageModal');
             if (event.target === modal) {
                 closeModal();
+            }
+            if (event.target === sendModal) {
+                closeSendMessageModal();
+            }
+        }
+
+        // Switch tabs
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (tab === 'users') {
+                document.querySelector('.tab-btn[onclick="switchTab(\'users\')"]').classList.add('active');
+                document.getElementById('usersTab').classList.add('active');
+            } else if (tab === 'requests') {
+                document.querySelector('.tab-btn[onclick="switchTab(\'requests\')"]').classList.add('active');
+                document.getElementById('requestsTab').classList.add('active');
+                loadRequests();
+            }
+        }
+
+        // Load requests
+        async function loadRequests() {
+            const tbody = document.getElementById('requestsTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка...</td></tr>';
+
+            try {
+                const data = await apiCall('/api/admin/requests?limit=200');
+                if (data.success) {
+                    const requests = data.requests;
+                    
+                    if (requests.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Нет запросов</h3></td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = requests.map(req => {
+                        const userInfo = req.username 
+                            ? `${req.username} (ID: ${req.user_id})`
+                            : `ID: ${req.user_id} ${req.telegram_id ? '(Telegram)' : '(Web)'}`;
+                        const promptPreview = req.prompt ? (req.prompt.length > 100 ? req.prompt.substring(0, 100) + '...' : req.prompt) : '-';
+                        const date = new Date(req.created_at).toLocaleString('ru-RU');
+                        let typeBadge = '<span class="badge badge-warning">📝 Текст</span>';
+                        if (req.type === 'image') {
+                            typeBadge = '<span class="badge badge-info">🖼️ Изображение</span>';
+                        } else if (req.type === 'image_edit') {
+                            typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
+                        }
+                        
+                        return `
+                            <tr>
+                                <td>${req.id}</td>
+                                <td>${userInfo}</td>
+                                <td style="max-width: 300px; word-wrap: break-word;">${promptPreview}</td>
+                                <td>${typeBadge}</td>
+                                <td>${req.credits_used || 0}</td>
+                                <td>${date}</td>
+                                <td>
+                                    <span class="user-link" onclick="showUserDetails(${req.user_id})">👤 Профиль</span>
+                                    ${req.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${req.user_id}, '${(req.username || req.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
+            }
+        }
+
+        // Open send message modal
+        let currentMessageUserId = null;
+        function openSendMessage(userId, username) {
+            currentMessageUserId = userId;
+            const modal = document.getElementById('sendMessageModal');
+            const recipientDiv = document.getElementById('messageRecipient');
+            recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})`;
+            document.getElementById('messageText').value = '';
+            document.getElementById('sendMessageError').style.display = 'none';
+            modal.style.display = 'block';
+        }
+
+        // Close send message modal
+        function closeSendMessageModal() {
+            document.getElementById('sendMessageModal').style.display = 'none';
+            currentMessageUserId = null;
+        }
+
+        // Send message
+        async function sendMessage() {
+            const messageText = document.getElementById('messageText').value.trim();
+            const errorDiv = document.getElementById('sendMessageError');
+
+            if (!messageText) {
+                errorDiv.textContent = 'Введите сообщение';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!currentMessageUserId) {
+                errorDiv.textContent = 'Ошибка: не выбран пользователь';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            const sendBtn = event.target;
+            const originalText = sendBtn.textContent;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Отправка...';
+
+            try {
+                const response = await fetch('/api/admin/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        userId: currentMessageUserId,
+                        message: messageText
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Сообщение отправлено успешно!');
+                    closeSendMessageModal();
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка отправки сообщения';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу';
+                errorDiv.style.display = 'block';
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = originalText;
             }
         }
     </script>

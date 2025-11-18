@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const { userQueries, transactionQueries, generationQueries } = require('./database');
+const { db, userQueries, transactionQueries, generationQueries } = require('./database');
 const GeminiService = require('./gemini-service');
 
 // Инициализация
@@ -176,8 +176,9 @@ app.get('/api/transactions/:webId', (req, res) => {
 
 // ==================== TELEGRAM BOT ====================
 // Запускаем бота только если есть токен
+let telegramBot = null;
 if (process.env.TELEGRAM_BOT_TOKEN) {
-  require('./telegram-bot');
+  telegramBot = require('./telegram-bot');
   console.log('🤖 Telegram бот запущен');
 } else {
   console.warn('⚠️  TELEGRAM_BOT_TOKEN не найден, бот не запущен');
@@ -331,6 +332,86 @@ app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
   } catch (error) {
     console.error('Ошибка получения пользователя:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Получить все запросы пользователей (для админ-панели)
+app.get('/api/admin/requests', requireAdmin, (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    
+    const requests = db.prepare(`
+      SELECT 
+        g.id,
+        g.prompt,
+        g.response,
+        g.credits_used,
+        g.type,
+        g.created_at,
+        u.id as user_id,
+        u.username,
+        u.telegram_id,
+        u.web_id
+      FROM generations g
+      JOIN users u ON g.user_id = u.id
+      ORDER BY g.created_at DESC
+      LIMIT ?
+    `).all(limit);
+    
+    res.json({
+      success: true,
+      requests
+    });
+  } catch (error) {
+    console.error('Ошибка получения запросов:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Отправить сообщение пользователю через Telegram бота
+app.post('/api/admin/send-message', requireAdmin, async (req, res) => {
+  try {
+    const { userId, message } = req.body;
+    
+    if (!userId || !message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Требуется userId и message' });
+    }
+    
+    // Получаем пользователя
+    const user = userQueries.getAdminUserById.get(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+    }
+    
+    // Проверяем, что у пользователя есть Telegram ID
+    if (!user.telegram_id) {
+      return res.status(400).json({ success: false, error: 'У пользователя нет Telegram ID (это Web пользователь)' });
+    }
+    
+    // Проверяем, что бот доступен
+    if (!telegramBot) {
+      return res.status(503).json({ success: false, error: 'Telegram бот не инициализирован' });
+    }
+    
+    // Отправляем сообщение
+    const chatId = parseInt(user.telegram_id);
+    await telegramBot.sendMessage(chatId, message);
+    
+    console.log(`📤 Админ отправил сообщение пользователю ${user.username || user.telegram_id}: ${message.substring(0, 50)}...`);
+    
+    res.json({
+      success: true,
+      message: 'Сообщение отправлено успешно'
+    });
+  } catch (error) {
+    console.error('Ошибка отправки сообщения:', error);
+    
+    // Обрабатываем специфичные ошибки Telegram
+    if (error.response && error.response.statusCode === 403) {
+      return res.status(403).json({ success: false, error: 'Пользователь заблокировал бота или не может получать сообщения' });
+    }
+    
+    res.status(500).json({ success: false, error: error.message || 'Ошибка отправки сообщения' });
   }
 });
 
