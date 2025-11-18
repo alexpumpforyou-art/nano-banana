@@ -13,7 +13,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 
+// Простая система сессий для админ-панели
+const adminSessions = new Map(); // sessionId -> { timestamp, ip }
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 часа
+
 // Middleware
+app.set('trust proxy', true); // Для получения реального IP в Railway
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
@@ -185,6 +191,152 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ==================== АДМИН-ПАНЕЛЬ ====================
+
+// Middleware для проверки админ-сессии
+function requireAdmin(req, res, next) {
+  const sessionId = req.headers['x-admin-session'] || req.query.session;
+  
+  if (!sessionId) {
+    return res.status(401).json({ success: false, error: 'Требуется авторизация' });
+  }
+  
+  const session = adminSessions.get(sessionId);
+  if (!session) {
+    return res.status(401).json({ success: false, error: 'Сессия истекла' });
+  }
+  
+  // Проверяем таймаут
+  if (Date.now() - session.timestamp > SESSION_TIMEOUT) {
+    adminSessions.delete(sessionId);
+    return res.status(401).json({ success: false, error: 'Сессия истекла' });
+  }
+  
+  // Обновляем время последней активности
+  session.timestamp = Date.now();
+  next();
+}
+
+// Очистка старых сессий каждые 10 минут
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, session] of adminSessions.entries()) {
+    if (now - session.timestamp > SESSION_TIMEOUT) {
+      adminSessions.delete(sessionId);
+    }
+  }
+}, 10 * 60 * 1000);
+
+// Вход в админ-панель
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const { password } = req.body;
+    
+    if (password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ success: false, error: 'Неверный пароль' });
+    }
+    
+    // Создаем сессию
+    const sessionId = uuidv4();
+    adminSessions.set(sessionId, {
+      timestamp: Date.now(),
+      ip: req.ip || req.connection.remoteAddress
+    });
+    
+    res.json({
+      success: true,
+      sessionId
+    });
+  } catch (error) {
+    console.error('Ошибка входа:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Получить общую статистику
+app.get('/api/admin/stats', requireAdmin, (req, res) => {
+  try {
+    const stats = userQueries.getTotalStats.get();
+    const transactionStats = transactionQueries.getTotalStats.get();
+    const generationStats = generationQueries.countByType.all();
+    
+    res.json({
+      success: true,
+      stats: {
+        users: stats || {},
+        transactions: transactionStats || {},
+        generations: generationStats || []
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения статистики:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Получить всех пользователей
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  try {
+    const users = userQueries.getAllUsers.all();
+    
+    // Добавляем информацию о рефералах для каждого пользователя
+    const usersWithRefs = users.map(user => {
+      const refCount = userQueries.countReferrals.get(user.id)?.count || 0;
+      return {
+        ...user,
+        referrals_count: refCount
+      };
+    });
+    
+    res.json({
+      success: true,
+      users: usersWithRefs
+    });
+  } catch (error) {
+    console.error('Ошибка получения пользователей:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Получить детальную информацию о пользователе
+app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    
+    const user = userQueries.getAdminUserById.get(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+    }
+    
+    // Получаем генерации
+    const generations = generationQueries.getAllByUserId.all(userId);
+    
+    // Получаем транзакции
+    const transactions = transactionQueries.getAllByUserId.all(userId);
+    
+    // Получаем рефералов
+    const referrals = userQueries.getReferrals.all(userId);
+    
+    res.json({
+      success: true,
+      user: {
+        ...user,
+        generations,
+        transactions,
+        referrals
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения пользователя:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Роут для HTML страницы админ-панели
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // Диагностический endpoint - показывает доступные модели

@@ -195,6 +195,34 @@ const userQueries = {
   
   // Подсчитать количество рефералов
   countReferrals: db.prepare('SELECT COUNT(*) as count FROM users WHERE referred_by = ?'),
+  
+  // АДМИН-ПАНЕЛЬ: Получить всех пользователей
+  getAllUsers: db.prepare(`
+    SELECT 
+      id, telegram_id, web_id, username, credits, 
+      total_generations, total_spent_credits, 
+      referral_code, referred_by, referral_bonus_earned,
+      is_blocked, created_at, last_used
+    FROM users
+    ORDER BY created_at DESC
+  `),
+  
+  // АДМИН-ПАНЕЛЬ: Получить пользователя по ID с детальной статистикой
+  getAdminUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
+  
+  // АДМИН-ПАНЕЛЬ: Подсчитать общую статистику
+  getTotalStats: db.prepare(`
+    SELECT 
+      COUNT(*) as total_users,
+      COUNT(CASE WHEN telegram_id IS NOT NULL THEN 1 END) as telegram_users,
+      COUNT(CASE WHEN web_id IS NOT NULL THEN 1 END) as web_users,
+      COUNT(CASE WHEN is_blocked = 1 THEN 1 END) as blocked_users,
+      SUM(total_generations) as total_generations,
+      SUM(total_spent_credits) as total_spent_credits,
+      SUM(credits) as total_credits_balance,
+      SUM(referral_bonus_earned) as total_referral_bonuses
+    FROM users
+  `),
 };
 
 // Функции для работы с транзакциями
@@ -209,6 +237,23 @@ const transactionQueries = {
     WHERE user_id = ?
     ORDER BY created_at DESC
     LIMIT ?
+  `),
+  
+  // АДМИН-ПАНЕЛЬ: Получить все транзакции пользователя
+  getAllByUserId: db.prepare(`
+    SELECT * FROM transactions
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `),
+  
+  // АДМИН-ПАНЕЛЬ: Подсчитать общую статистику транзакций
+  getTotalStats: db.prepare(`
+    SELECT 
+      COUNT(*) as total_transactions,
+      SUM(CASE WHEN type = 'payment' THEN stars_paid ELSE 0 END) as total_stars_received,
+      SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_credits_added,
+      SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_credits_spent
+    FROM transactions
   `),
 };
 
@@ -225,6 +270,21 @@ const generationQueries = {
     WHERE user_id = ?
     ORDER BY created_at DESC
     LIMIT ?
+  `),
+  
+  // АДМИН-ПАНЕЛЬ: Получить все генерации пользователя
+  getAllByUserId: db.prepare(`
+    SELECT id, prompt, SUBSTR(response, 1, 200) as response_preview, credits_used, type, created_at
+    FROM generations
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `),
+  
+  // АДМИН-ПАНЕЛЬ: Подсчитать генерации по типам
+  countByType: db.prepare(`
+    SELECT type, COUNT(*) as count, SUM(credits_used) as total_credits
+    FROM generations
+    GROUP BY type
   `),
 };
 
