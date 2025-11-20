@@ -136,113 +136,61 @@ class ImageService {
   }
 
   /**
-   * Редактирование изображения через REST API (для моделей, поддерживающих только predict)
-   */
-  async editImageViaRest(modelName, imageBuffer, prompt) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${this.genAI.apiKey}`;
-    const base64Image = imageBuffer.toString('base64');
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        instances: [{
-          prompt: prompt,
-          image: {
-            bytesBase64Encoded: base64Image
-          }
-        }],
-        parameters: {
-          sampleCount: 1,
-          // aspectRatio is not usually supported for editing existing images, 
-          // but we can try without it or with it if needed.
-          // For editing, the model usually preserves aspect ratio or uses the mask.
-          // Let's try minimal parameters first.
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`REST API Error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.predictions && data.predictions[0] && data.predictions[0].bytesBase64Encoded) {
-      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
-    }
-
-    if (data.predictions && data.predictions[0] && data.predictions[0].mimeType && data.predictions[0].bytesBase64Encoded) {
-      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
-    }
-
-    throw new Error('No image data in REST response');
-  }
-
-  /**
    * Редактирование изображения по текстовому описанию
    * @param {Buffer} imageBuffer - Исходное изображение
    * @param {string} prompt - Описание изменений
    * @returns {Promise<{imageBuffer: Buffer, tokensUsed: number}>}
    */
   async editImage(imageBuffer, prompt) {
-    for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
+    // Reset edit index if needed or keep persistent? Better reset for each request to start with best model
+    this.currentEditModelIndex = 0;
+
+    for (let attempt = 0; attempt < this.editingModels.length; attempt++) {
       try {
-        const modelName = this.modelsToTry[this.currentModelIndex];
+        const modelName = this.editingModels[this.currentEditModelIndex];
         console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
 
+        // Конвертируем изображение в base64
+        const base64Image = imageBuffer.toString('base64');
+
+        // Формируем детальный промпт для редактирования
+        const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
+
+        // Используем Gemini модель для редактирования
+        const editModel = this.genAI.getGenerativeModel({ model: modelName });
+
+        const result = await editModel.generateContent([
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: 'image/jpeg' // или определять автоматически
+            }
+          },
+          { text: editPrompt }
+        ], {
+          generationConfig: {
+            response_modalities: ['IMAGE']
+          }
+        });
+
+        const response = await result.response;
+
+        console.log('📋 Структура ответа (редактирование):');
+        console.log('response.candidates:', response.candidates?.length || 0);
+
+        // Получаем отредактированное изображение
         let editedImageBuffer = null;
 
-        // Если это Imagen модель, используем REST API predict
-        if (modelName.startsWith('imagen-')) {
-          try {
-            editedImageBuffer = await this.editImageViaRest(modelName, imageBuffer, prompt);
-            console.log(`✅ Изображение отредактировано через REST API (${editedImageBuffer.length} bytes)`);
-          } catch (restError) {
-            console.error(`⚠️ Ошибка REST API для ${modelName}:`, restError.message);
-            throw restError;
-          }
-        } else {
-          // Конвертируем изображение в base64
-          const base64Image = imageBuffer.toString('base64');
+        if (response.candidates && response.candidates[0]) {
+          const candidate = response.candidates[0];
 
-          // Формируем детальный промпт для редактирования
-          const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
-
-          // Отправляем изображение + промпт для редактирования
-          const result = await this.imageModel.generateContent([
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: 'image/jpeg' // или определять автоматически
-              }
-            },
-            { text: editPrompt }
-          ], {
-            generationConfig: {
-              response_modalities: ['IMAGE']
-            }
-          });
-
-          const response = await result.response;
-
-          console.log('📋 Структура ответа (редактирование):');
-          console.log('response.candidates:', response.candidates?.length || 0);
-
-          if (response.candidates && response.candidates[0]) {
-            const candidate = response.candidates[0];
-
-            if (candidate.content && candidate.content.parts) {
-              for (const part of candidate.content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                  editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
-                  console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
-                  break;
-                }
+          if (candidate.content && candidate.content.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
+                console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
+                break;
               }
             }
           }
@@ -250,18 +198,7 @@ class ImageService {
 
         if (!editedImageBuffer) {
           console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
-
-          // Пробуем следующую модель
-          this.currentModelIndex++;
-          if (this.currentModelIndex < this.modelsToTry.length) {
-            console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-            this.imageModel = this.genAI.getGenerativeModel({
-              model: this.modelsToTry[this.currentModelIndex]
-            });
-            continue;
-          }
-
-          throw new Error('Модель не смогла отредактировать изображение');
+          throw new Error('Модель вернула пустой результат (возможно, только текст)');
         }
 
         const tokensUsed = Math.ceil(prompt.length / 4) + 50;
@@ -273,14 +210,11 @@ class ImageService {
         };
 
       } catch (error) {
-        console.error(`❌ Ошибка редактирования с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
+        console.error(`❌ Ошибка редактирования с моделью ${this.editingModels[this.currentEditModelIndex]}:`, error.message);
 
-        this.currentModelIndex++;
-        if (this.currentModelIndex < this.modelsToTry.length) {
-          console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-          this.imageModel = this.genAI.getGenerativeModel({
-            model: this.modelsToTry[this.currentModelIndex]
-          });
+        this.currentEditModelIndex++;
+        if (this.currentEditModelIndex < this.editingModels.length) {
+          console.log(`🔄 Переключаюсь на модель: ${this.editingModels[this.currentEditModelIndex]}`);
           continue;
         }
 
