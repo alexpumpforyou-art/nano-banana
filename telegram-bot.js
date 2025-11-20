@@ -915,6 +915,8 @@ bot.on('callback_query', async (query) => {
   const messageId = query.message.message_id;
   const data = query.data;
 
+  console.log(`🔔 Callback received: ${data} from ${chatId}`);
+
   // Удаляем старое сообщение для всех кнопок меню
   if (data.startsWith('menu_')) {
     try {
