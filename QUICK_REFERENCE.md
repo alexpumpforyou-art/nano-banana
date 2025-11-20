@@ -202,3 +202,4 @@ await bot.sendPhoto(chatId, 'URL_OR_FILE_ID', {
 
 **Подробнее смотрите в `BOT_CUSTOMIZATION_GUIDE.md`** 📚
 
+

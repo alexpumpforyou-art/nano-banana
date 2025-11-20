@@ -1324,7 +1324,7 @@ bot.on('callback_query', async (query) => {
 bot.on('pre_checkout_query', async (query) => {
   console.log('🔔 PRE_CHECKOUT_QUERY ПОЛУЧЕН!');
   console.log('Query ID:', query.id);
-  console.log('From user:', query.from.id);
+  console.log('From user:', query.from.id, query.from.first_name);
   console.log('Currency:', query.currency);
   console.log('Total amount:', query.total_amount);
   console.log('Invoice payload:', query.invoice_payload);
