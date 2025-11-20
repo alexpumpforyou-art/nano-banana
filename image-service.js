@@ -17,6 +17,8 @@ class ImageService {
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
     // Imagen 4 поддерживает image input через predict
     this.editingModels = [
+      'gemini-2.5-flash-image-preview',    // New experimental model
+      'gemini-2.0-flash-exp-image-generation', // New experimental model
       'imagen-4.0-generate-preview-06-06', // Imagen 4 (Supports predict)
       'gemini-2.0-flash-exp'               // Fallback
     ];
@@ -196,107 +198,92 @@ class ImageService {
    * @returns {Promise<{imageBuffer: Buffer, tokensUsed: number}>}
    */
   async editImage(imageBuffer, prompt) {
-    // Reset edit index if needed or keep persistent? Better reset for each request to start with best model
-    this.currentEditModelIndex = 0;
+    // 1. Попытка нативного редактирования (Gemini 2.0)
+    try {
+      console.log(`✏️ Попытка нативного редактирования через gemini-2.0-flash-exp...`);
+      const modelName = 'gemini-2.0-flash-exp';
+      const base64Image = imageBuffer.toString('base64');
+      const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
 
-    for (let attempt = 0; attempt < this.editingModels.length; attempt++) {
-      try {
-        const modelName = this.editingModels[this.currentEditModelIndex];
-        console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
-        console.log(`   Промпт: "${prompt}"`);
-
-        let editedImageBuffer = null;
-
-        if (modelName.startsWith('imagen-')) {
-          // Use REST API for Imagen
-          editedImageBuffer = await this.editImageViaRest(modelName, imageBuffer, prompt);
-        } else {
-          // Use Gemini SDK
-          // Конвертируем изображение в base64
-          const base64Image = imageBuffer.toString('base64');
-
-          // Формируем детальный промпт для редактирования
-          const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
-
-          // Используем Gemini модель для редактирования
-          const editModel = this.genAI.getGenerativeModel({ model: modelName });
-
-          const result = await editModel.generateContent([
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: 'image/jpeg' // или определять автоматически
-              }
-            },
-            { text: editPrompt }
-          ], {
-            // generationConfig: {
-            //   response_modalities: ['IMAGE'] // Убираем ограничение, чтобы видеть текст ошибки если есть
-            // },
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-            ]
-          });
-
-          const response = await result.response;
-
-          console.log('📋 Структура ответа (редактирование):');
-          console.log('response.candidates:', response.candidates?.length || 0);
-          if (response.promptFeedback) {
-            console.log('⚠️ Prompt Feedback:', JSON.stringify(response.promptFeedback, null, 2));
+      const editModel = this.genAI.getGenerativeModel({ model: modelName });
+      const result = await editModel.generateContent([
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: 'image/jpeg'
           }
+        },
+        { text: editPrompt }
+      ], {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ]
+      });
 
-          if (response.candidates && response.candidates[0]) {
-            const candidate = response.candidates[0];
+      const response = await result.response;
 
-            if (candidate.finishReason !== 'STOP') {
-              console.log('⚠️ Finish Reason:', candidate.finishReason);
-            }
-
-            if (candidate.content && candidate.content.parts) {
-              for (const part of candidate.content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                  editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
-                  console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
-                  break;
-                } else if (part.text) {
-                  console.log(`ℹ️ Модель вернула текст вместо изображения: "${part.text}"`);
-                }
-              }
-            }
+      if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData && part.inlineData.data) {
+            console.log(`✅ Нативное редактирование успешно!`);
+            const editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
+            const tokensUsed = Math.ceil(prompt.length / 4) + 50;
+            return { imageBuffer: editedImageBuffer, tokensUsed, success: true };
           }
         }
-
-        if (!editedImageBuffer) {
-          console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
-          throw new Error('Модель вернула пустой результат (возможно, только текст)');
-        }
-
-        const tokensUsed = Math.ceil(prompt.length / 4) + 50;
-
-        return {
-          imageBuffer: editedImageBuffer,
-          tokensUsed,
-          success: true
-        };
-
-      } catch (error) {
-        console.error(`❌ Ошибка редактирования с моделью ${this.editingModels[this.currentEditModelIndex]}:`, error.message);
-
-        this.currentEditModelIndex++;
-        if (this.currentEditModelIndex < this.editingModels.length) {
-          console.log(`🔄 Переключаюсь на модель: ${this.editingModels[this.currentEditModelIndex]}`);
-          continue;
-        }
-
-        throw new Error('Не удалось отредактировать изображение: ' + error.message);
       }
+      console.warn('⚠️ Нативное редактирование не вернуло изображение, переходим к fallback...');
+    } catch (error) {
+      console.error('⚠️ Ошибка нативного редактирования:', error.message);
+      // Fallback continues below
     }
 
-    throw new Error('Ни одна модель не смогла отредактировать изображение');
+    // 2. Fallback: Describe + Generate (Имитация редактирования)
+    // Используем Gemini 1.5 Flash для описания картинки с учетом изменений, затем Imagen 4 для генерации
+    try {
+      console.log(`🔄 Запуск Fallback: Describe + Generate...`);
+
+      // Шаг 1: Описание новой картинки
+      const describeModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const base64Image = imageBuffer.toString('base64');
+      const describePrompt = `Посмотри на это изображение. Пользователь хочет изменить его так: "${prompt}".
+      
+      Опиши ОЧЕНЬ ПОДРОБНО, как должно выглядеть итоговое изображение. 
+      Включи в описание все детали оригинального изображения (стиль, цвета, композицию, объекты), но с внесенными изменениями.
+      Описание должно быть на английском языке для лучшей генерации.
+      Верни ТОЛЬКО описание, без лишних слов.`;
+
+      const describeResult = await describeModel.generateContent([
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: 'image/jpeg'
+          }
+        },
+        { text: describePrompt }
+      ]);
+
+      const newPrompt = describeResult.response.text();
+      console.log(`📝 Сгенерирован новый промпт для генерации: "${newPrompt.substring(0, 100)}..."`);
+
+      // Шаг 2: Генерация новой картинки по описанию
+      // Используем существующий метод generateImage, который сам выберет лучшую модель (Imagen 4)
+      const generationResult = await this.generateImage(newPrompt);
+
+      console.log(`✅ Fallback редактирование успешно!`);
+      return {
+        imageBuffer: generationResult.imageBuffer,
+        tokensUsed: generationResult.tokensUsed + 50, // Доп. токены за описание
+        success: true
+      };
+
+    } catch (fallbackError) {
+      console.error('❌ Ошибка Fallback редактирования:', fallbackError.message);
+      throw new Error('Не удалось отредактировать изображение даже через fallback: ' + fallbackError.message);
+    }
   }
 
   /**
