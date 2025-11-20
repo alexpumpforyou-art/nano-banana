@@ -6,15 +6,53 @@ class ImageService {
     // Модели для генерации изображений (приоритет: работающие → Gemini 3)
     // Gemini 3 пока может быть недоступна, поэтому пробуем сначала стабильные
     this.modelsToTry = [
-      'imagen-3.0-generate-002',          // Imagen 3 (Latest Stable)
-      'imagen-3.0-generate-001',          // Imagen 3 (Previous)
-      'imagen-3.0-fast-generate-001',     // Imagen 3 Fast
-      'gemini-2.0-flash-exp-image-generation' // Fallback
+      'imagen-4.0-generate-001',          // Imagen 4 (Latest)
+      'imagen-4.0-ultra-generate-001',    // Imagen 4 Ultra
+      'imagen-3.0-generate-001',          // Imagen 3
+      'gemini-2.0-flash-exp'              // Fallback text-to-image
     ];
     this.currentModelIndex = 0;
     this.imageModel = this.genAI.getGenerativeModel({
       model: this.modelsToTry[this.currentModelIndex]
     });
+  }
+
+  /**
+   * Генерация изображения через REST API (для моделей, поддерживающих только predict)
+   */
+  async generateImageViaRest(modelName, prompt) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${this.genAI.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        instances: [{ prompt: prompt }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: "1:1"
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`REST API Error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.predictions && data.predictions[0] && data.predictions[0].bytesBase64Encoded) {
+      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
+    }
+
+    if (data.predictions && data.predictions[0] && data.predictions[0].mimeType && data.predictions[0].bytesBase64Encoded) {
+      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
+    }
+
+    throw new Error('No image data in REST response');
   }
 
   /**
@@ -30,45 +68,31 @@ class ImageService {
         console.log(`🎨 Генерирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
 
-        // Генерируем изображение с правильной конфигурацией
-        const result = await this.imageModel.generateContent(prompt, {
-          generationConfig: {
-            response_modalities: ['IMAGE']
-          }
-        });
-
-        const response = await result.response;
-
-        // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
-        console.log('📋 Структура ответа API:');
-        console.log('response.candidates:', response.candidates?.length || 0);
-        if (response.candidates && response.candidates[0]) {
-          const candidate = response.candidates[0];
-          console.log('candidate.content:', !!candidate.content);
-          console.log('candidate.content.parts:', candidate.content?.parts?.length || 0);
-
-          if (candidate.content?.parts) {
-            candidate.content.parts.forEach((part, i) => {
-              console.log(`Part ${i} keys:`, Object.keys(part));
-              if (part.text) console.log(`  - text: ${part.text.substring(0, 100)}...`);
-              if (part.inlineData) console.log(`  - inlineData.mimeType: ${part.inlineData.mimeType}`);
-            });
-          }
-        }
-
-        // Получаем изображение из ответа
         let imageBuffer = null;
 
-        // Проверяем разные возможные форматы ответа
-        if (response.candidates && response.candidates[0]) {
-          const candidate = response.candidates[0];
+        // Если это Imagen модель, используем REST API predict
+        if (modelName.startsWith('imagen-')) {
+          try {
+            imageBuffer = await this.generateImageViaRest(modelName, prompt);
+            console.log(`✅ Изображение получено через REST API (${imageBuffer.length} bytes)`);
+          } catch (restError) {
+            console.error(`⚠️ Ошибка REST API для ${modelName}:`, restError.message);
+            // Если ошибка 404 или 400, пробуем стандартный метод (на всякий случай) или следующую модель
+            throw restError;
+          }
+        } else {
+          // Стандартный метод для Gemini моделей
+          const result = await this.imageModel.generateContent(prompt, {
+            generationConfig: {
+              response_modalities: ['IMAGE']
+            }
+          });
 
-          if (candidate.content && candidate.content.parts) {
-            for (const part of candidate.content.parts) {
+          const response = await result.response;
+          if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
+            for (const part of response.candidates[0].content.parts) {
               if (part.inlineData && part.inlineData.data) {
-                // Изображение в base64
                 imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-                console.log(`✅ Изображение получено (${part.inlineData.mimeType}, ${imageBuffer.length} bytes)`);
                 break;
               }
             }
@@ -76,19 +100,8 @@ class ImageService {
         }
 
         if (!imageBuffer) {
-          console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} вернула только текст, не изображение`);
-
-          // Пробуем следующую модель
-          this.currentModelIndex++;
-          if (this.currentModelIndex < this.modelsToTry.length) {
-            console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-            this.imageModel = this.genAI.getGenerativeModel({
-              model: this.modelsToTry[this.currentModelIndex]
-            });
-            continue; // Пробуем следующую модель
-          }
-
-          throw new Error('Ни одна модель не смогла сгенерировать изображение. Все модели возвращают только текст.');
+          console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не вернула изображение`);
+          throw new Error('Модель вернула пустой результат');
         }
 
         // Примерный подсчет токенов

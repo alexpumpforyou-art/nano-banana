@@ -7,13 +7,10 @@ class GeminiService {
     // Список моделей для автоматического перебора (приоритет: работающие → Gemini 3)
     // Gemini 3 пока может быть недоступна, поэтому пробуем сначала стабильные
     this.modelsToTry = [
-      'gemini-3.0-pro',            // Самая мощная модель (Nov 2025)
-      'gemini-3.0-flash',          // Быстрая новая модель
-      'gemini-2.5-pro',            // Стабильная мощная (fallback)
-      'gemini-2.5-flash',          // Стабильная быстрая
-      'gemini-2.0-flash',          // Предыдущее поколение
-      'gemini-1.5-pro',            // Legacy fallback
-      'gemini-1.5-flash'           // Legacy fallback
+      'gemini-3-pro-preview',      // Verified available (Nov 2025)
+      'gemini-2.0-flash-exp',      // Verified available
+      'gemini-1.5-pro',            // Stable fallback
+      'gemini-1.5-flash'           // Stable fallback
     ];
     this.currentModelIndex = 0;
     this.model = this.genAI.getGenerativeModel({
