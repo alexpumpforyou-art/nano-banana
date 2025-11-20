@@ -17,6 +17,7 @@ class ImageService {
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
     // Imagen 4 поддерживает image input через predict
     this.editingModels = [
+      'gemini-2.5-flash-image',            // User confirmed working model!
       'gemini-3-pro-preview',              // User suggested
       'gemini-2.5-pro',                    // User suggested
       'gemini-2.5-flash-image-preview',    // Experimental
