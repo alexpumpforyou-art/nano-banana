@@ -1308,9 +1308,12 @@ bot.on('callback_query', async (query) => {
       message_id: messageId,
       reply_markup: keyboard
     });
-  } else if (data.startsWith('buy_stars_') || data.startsWith('buy_rub_')) {
+  } else if (data.startsWith('buy_stars_') || data.startsWith('buy_rub_') || (data.startsWith('buy_') && !data.startsWith('buy_method_'))) {
     const isRub = data.startsWith('buy_rub_');
-    const stars = parseInt(data.split('_')[2]);
+    // Поддержка старого формата buy_X (считаем как Stars)
+    const isOldFormat = data.startsWith('buy_') && !data.startsWith('buy_stars_') && !data.startsWith('buy_rub_') && !data.startsWith('buy_method_');
+
+    const stars = parseInt(data.split('_')[isOldFormat ? 1 : 2]);
     const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
 
     console.log(`💳 Попытка создать инвойс (${isRub ? 'RUB' : 'Stars'}): ${stars} Stars-eq для пользователя ${chatId}`);
