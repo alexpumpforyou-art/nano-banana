@@ -1325,6 +1325,13 @@ bot.on('callback_query', async (query) => {
       const prices = [{ label: title, amount: isRub ? package_.price_rub * 100 : stars }]; // RUB в копейках, XTR в единицах
       const providerToken = isRub ? YOOKASSA_PROVIDER_TOKEN : '';
 
+      console.log('💳 Подготовка к отправке инвойса:');
+      console.log('   Title:', title);
+      console.log('   Payload:', payload);
+      console.log('   Provider Token:', providerToken === '' ? '(empty string for Stars)' : providerToken);
+      console.log('   Currency:', currency);
+      console.log('   Prices:', JSON.stringify(prices));
+
       if (isRub && !providerToken) {
         return await bot.answerCallbackQuery(query.id, { text: '❌ Оплата картой временно недоступна (токен не настроен)', show_alert: true });
       }
@@ -1346,9 +1353,11 @@ bot.on('callback_query', async (query) => {
         }
       );
 
+      console.log('✅ Инвойс успешно отправлен');
       await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен!' });
     } catch (error) {
       console.error('❌ Ошибка создания инвойса:', error);
+      console.error('Stack:', error.stack);
       await bot.answerCallbackQuery(query.id, { text: `❌ Ошибка: ${error.message}`, show_alert: true });
     }
   } else if (data === 'contact_support') {

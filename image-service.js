@@ -14,12 +14,10 @@ class ImageService {
 
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
     // Imagen 4 пока не поддерживает image input через predict, поэтому используем Gemini
+    // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
+    // Imagen 4 пока не поддерживает image input через predict, поэтому используем Gemini
     this.editingModels = [
-      'gemini-2.0-flash-exp',      // Multimodal (Image+Text -> Text/Image?)
-      'gemini-1.5-pro-latest',     // Verified latest version
-      'gemini-1.5-flash-latest',   // Verified latest version
-      'gemini-1.5-pro',            // Fallback
-      'gemini-1.5-flash'           // Fallback
+      'gemini-2.0-flash-exp'       // Multimodal (Image+Text -> Text/Image?)
     ];
 
     this.currentModelIndex = 0;
