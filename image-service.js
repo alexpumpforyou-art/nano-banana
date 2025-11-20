@@ -17,9 +17,8 @@ class ImageService {
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
     // Imagen 4 пока не поддерживает image input через predict, поэтому используем Gemini
     this.editingModels = [
-      'gemini-2.0-flash-exp',      // Multimodal (Image+Text -> Text/Image?)
-      'gemini-1.5-pro',            // Stable 1.5 Pro
-      'gemini-1.5-flash'           // Stable 1.5 Flash
+      'imagen-3.0-generate-001',   // Imagen 3 (Try via REST)
+      'gemini-2.0-flash-exp'       // Multimodal (Image+Text -> Text/Image?)
     ];
 
     this.currentModelIndex = 0;
@@ -28,6 +27,48 @@ class ImageService {
     this.imageModel = this.genAI.getGenerativeModel({
       model: this.modelsToTry[this.currentModelIndex]
     });
+  }
+
+  /**
+   * Редактирование изображения через REST API (для Imagen)
+   */
+  async editImageViaRest(modelName, imageBuffer, prompt) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${this.genAI.apiKey}`;
+    const base64Image = imageBuffer.toString('base64');
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        instances: [{
+          prompt: prompt,
+          image: { bytesBase64Encoded: base64Image }
+        }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: "1:1"
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`REST API Error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.predictions && data.predictions[0] && data.predictions[0].bytesBase64Encoded) {
+      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
+    }
+
+    if (data.predictions && data.predictions[0] && data.predictions[0].mimeType && data.predictions[0].bytesBase64Encoded) {
+      return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
+    }
+
+    throw new Error('No image data in REST response');
   }
 
   /**
