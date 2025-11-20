@@ -21,9 +21,10 @@ const bot = new TelegramBot(token, {
 });
 
 // Принудительно удаляем вебхук перед стартом polling
+const INSTANCE_ID = Math.floor(Math.random() * 10000);
 bot.deleteWebHook().then(() => {
-  console.log('✅ Вебхук удален, используется polling');
-  console.log('🚀 BOT VERSION: 1.1 (Stars Fix Applied)');
+  console.log(`✅ Вебхук удален, используется polling. INSTANCE_ID: ${INSTANCE_ID}`);
+  console.log('🚀 BOT VERSION: 1.2 (Debug Duplication)');
 });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
@@ -35,41 +36,52 @@ const REFERRAL_BONUS = parseInt(process.env.REFERRAL_BONUS) || 5; // бонус 
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 
 // Цены на операции (в кредитах)
+// 1 Star ≈ $0.02, 1 Star = 40 credits => 1 credit ≈ $0.0005
+// Cost basis:
+// - Text (Flash): ~$0.0001/req -> 2x = $0.0002 -> < 1 credit. Set to 1.
+// - Image (Imagen 3): ~$0.04/img -> 2x = $0.08 -> 160 credits.
 const PRICES = {
-  TEXT_SHORT: 1,      // короткий текст (до 500 символов) - было 40-60 токенов
+  TEXT_SHORT: 1,      // короткий текст (до 500 символов)
   TEXT_LONG: 2,       // длинный текст (500+ символов)
-  IMAGE_GEN: 10,      // генерация изображения - было 1000-3000 токенов
-  IMAGE_EDIT: 15      // редактирование изображения - было 1500-4000 токенов
+  IMAGE_GEN: 160,     // генерация изображения (4 Stars)
+  IMAGE_EDIT: 180     // редактирование изображения (4.5 Stars)
 };
+
+const YOOKASSA_PROVIDER_TOKEN = process.env.YOOKASSA_PROVIDER_TOKEN;
 
 // Генерируем пакеты кредитов динамически на основе CREDITS_PER_STAR
 const CREDIT_PACKAGES = [
   {
     stars: 1,
+    price_rub: 2, // Примерная цена в рублях
     credits: CREDITS_PER_STAR * 1,
     label: `${CREDITS_PER_STAR} кредитов`,
     description: 'Базовый'
   },
   {
     stars: 5,
+    price_rub: 10,
     credits: Math.floor(CREDITS_PER_STAR * 5 * 1.1),
     label: `${Math.floor(CREDITS_PER_STAR * 5 * 1.1)} кредитов`,
     description: '+10% 💎'
   },
   {
     stars: 10,
+    price_rub: 20,
     credits: Math.floor(CREDITS_PER_STAR * 10 * 1.2),
     label: `${Math.floor(CREDITS_PER_STAR * 10 * 1.2)} кредитов`,
     description: '+20% 💎'
   },
   {
     stars: 25,
+    price_rub: 50,
     credits: Math.floor(CREDITS_PER_STAR * 25 * 1.3),
     label: `${Math.floor(CREDITS_PER_STAR * 25 * 1.3)} кредитов`,
     description: '+30% 💎'
   },
   {
     stars: 50,
+    price_rub: 100,
     credits: Math.floor(CREDITS_PER_STAR * 50 * 1.5),
     label: `${Math.floor(CREDITS_PER_STAR * 50 * 1.5)} кредитов`,
     description: '+50% 🔥'
@@ -269,21 +281,19 @@ bot.onText(/\/buy/, async (msg) => {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
+    // Предлагаем выбор валюты
     const keyboard = {
-      inline_keyboard: CREDIT_PACKAGES.map(pkg => [{
-        text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
-        callback_data: `buy_${pkg.stars}`
-      }])
+      inline_keyboard: [
+        [
+          { text: '⭐ Telegram Stars', callback_data: 'buy_method_stars' },
+          { text: '₽ Рубли (ЮKassa)', callback_data: 'buy_method_rub' }
+        ]
+      ]
     };
 
     const priceInfo = `💰 *Магазин кредитов*\n\n` +
       `💎 Ваш баланс: ${user.credits} кредитов\n\n` +
-      `📊 Стоимость операций:\n` +
-      `• Текст (короткий): ${PRICES.TEXT_SHORT} кредит\n` +
-      `• Текст (длинный): ${PRICES.TEXT_LONG} кредита\n` +
-      `• Генерация изображения: ${PRICES.IMAGE_GEN} кредитов (скоро)\n` +
-      `• Редактирование: ${PRICES.IMAGE_EDIT} кредитов (скоро)\n\n` +
-      `🎁 Больше покупаете = больше бонусов!`;
+      `Выберите способ оплаты:`;
 
     const sentMsg = await bot.sendMessage(
       chatId,
@@ -916,6 +926,7 @@ bot.on('callback_query', async (query) => {
 
   // Обработка кнопок главного меню
   if (data === 'menu_balance') {
+    console.log(`[${INSTANCE_ID}] Processing menu_balance for ${chatId}`);
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
 
@@ -1263,29 +1274,69 @@ bot.on('callback_query', async (query) => {
       console.error('Ошибка проверки баланса:', error);
       await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
     }
-  } else if (data.startsWith('buy_')) {
-    const stars = parseInt(data.split('_')[1]);
+  } else if (data === 'buy_method_stars') {
+    // Показываем пакеты за Stars
+    const keyboard = {
+      inline_keyboard: [
+        ...CREDIT_PACKAGES.map(pkg => [{
+          text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
+          callback_data: `buy_stars_${pkg.stars}`
+        }]),
+        [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
+      ]
+    };
+    await bot.editMessageText('Выберите пакет (оплата Telegram Stars):', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: keyboard
+    });
+  } else if (data === 'buy_method_rub') {
+    // Показываем пакеты за Рубли
+    const keyboard = {
+      inline_keyboard: [
+        ...CREDIT_PACKAGES.map(pkg => [{
+          text: `₽ ${pkg.price_rub} → ${pkg.credits} ${pkg.description}`,
+          callback_data: `buy_rub_${pkg.stars}` // используем stars как ID пакета для простоты
+        }]),
+        [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
+      ]
+    };
+    await bot.editMessageText('Выберите пакет (оплата ЮKassa):', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: keyboard
+    });
+  } else if (data.startsWith('buy_stars_') || data.startsWith('buy_rub_')) {
+    const isRub = data.startsWith('buy_rub_');
+    const stars = parseInt(data.split('_')[2]);
     const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
 
-    console.log(`💳 Попытка создать инвойс: ${stars} Stars для пользователя ${chatId}`);
+    console.log(`💳 Попытка создать инвойс (${isRub ? 'RUB' : 'Stars'}): ${stars} Stars-eq для пользователя ${chatId}`);
 
     if (!package_) {
-      console.error(`❌ Пакет не найден для ${stars} Stars`);
       return await bot.answerCallbackQuery(query.id, { text: '❌ Пакет не найден', show_alert: true });
     }
 
     try {
-      console.log(`📦 Создаем инвойс для пакета:`, package_);
+      const title = `${package_.credits} кредитов`;
+      const description = `Пакет ${package_.description} для Nano Banana`;
+      const payload = `${chatId}_${stars}_${Date.now()}_${isRub ? 'rub' : 'stars'}`;
+      const currency = isRub ? 'RUB' : 'XTR';
+      const prices = [{ label: title, amount: isRub ? package_.price_rub * 100 : stars }]; // RUB в копейках, XTR в единицах
+      const providerToken = isRub ? YOOKASSA_PROVIDER_TOKEN : '';
 
-      // Отправляем инвойс для оплаты Stars
-      const invoice = await bot.sendInvoice(
+      if (isRub && !providerToken) {
+        return await bot.answerCallbackQuery(query.id, { text: '❌ Оплата картой временно недоступна (токен не настроен)', show_alert: true });
+      }
+
+      await bot.sendInvoice(
         chatId,
-        `${package_.credits} кредитов`, // title (max 32 chars)
-        `Пакет ${package_.description} для Nano Banana`, // description (max 255 chars)
-        `${chatId}_${stars}_${Date.now()}`, // payload
-        '', // provider_token пустой для Stars
-        'XTR', // валюта Telegram Stars
-        [{ label: `${package_.credits} кредитов`, amount: stars }], // prices
+        title,
+        description,
+        payload,
+        providerToken,
+        currency,
+        prices,
         {
           need_name: false,
           need_phone_number: false,
@@ -1295,21 +1346,10 @@ bot.on('callback_query', async (query) => {
         }
       );
 
-      console.log(`✅ Инвойс создан успешно!`);
-      console.log('   Message ID:', invoice.message_id);
-      console.log('   Chat ID:', invoice.chat.id);
-      console.log('   ⚠️ ВАЖНО: Теперь ждем pre_checkout_query от пользователя...');
-
-      await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен! Проверьте чат.' });
+      await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен!' });
     } catch (error) {
       console.error('❌ Ошибка создания инвойса:', error);
-      console.error('Детали:', error.response?.body || error.message);
-      console.error('Stack:', error.stack);
-
-      await bot.answerCallbackQuery(query.id, {
-        text: `❌ Ошибка: ${error.message}`,
-        show_alert: true
-      });
+      await bot.answerCallbackQuery(query.id, { text: `❌ Ошибка: ${error.message}`, show_alert: true });
     }
   } else if (data === 'contact_support') {
     // Кнопка "Связаться с поддержкой"
@@ -1372,23 +1412,33 @@ bot.on('pre_checkout_query', async (query) => {
 // Обработка успешного платежа
 bot.on('successful_payment', async (msg) => {
   const chatId = msg.chat.id;
-  const stars = msg.successful_payment.total_amount;
+  const payment = msg.successful_payment;
+  const currency = payment.currency;
+  const totalAmount = payment.total_amount;
 
-  console.log(`💰 Успешный платеж: ${stars} Stars от пользователя ${chatId}`);
+  console.log(`💰 Успешный платеж: ${totalAmount} ${currency} от пользователя ${chatId}`);
 
   try {
     const user = userQueries.getByTelegramId.get(chatId.toString());
 
     if (!user) {
-      console.error(`❌ Пользователь ${chatId} не найден после успешной оплаты`);
       return await bot.sendMessage(chatId, '❌ Пользователь не найден. Используйте /start');
     }
 
-    const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
+    let package_;
+    if (currency === 'XTR') {
+      package_ = CREDIT_PACKAGES.find(p => p.stars === totalAmount);
+    } else if (currency === 'RUB') {
+      // RUB amount is in kopecks (cents), so divide by 100
+      const amountRub = totalAmount / 100;
+      package_ = CREDIT_PACKAGES.find(p => p.price_rub === amountRub);
+    }
 
     if (!package_) {
-      console.error(`❌ Пакет не найден для ${stars} Stars`);
-      return await bot.sendMessage(chatId, '❌ Пакет не найден.');
+      console.error(`❌ Пакет не найден для ${totalAmount} ${currency}`);
+      // Fallback logic if exact package not found (e.g. dynamic price?) - for now just error or give closest?
+      // Let's just give error for now to be safe
+      return await bot.sendMessage(chatId, '❌ Пакет не найден. Свяжитесь с поддержкой.');
     }
 
     // Начисляем кредиты
@@ -1399,8 +1449,8 @@ bot.on('successful_payment', async (msg) => {
       user.id,
       'purchase',
       package_.credits,
-      stars,
-      `Покупка ${package_.label}`
+      currency === 'XTR' ? totalAmount : totalAmount / 100, // Store amount in main units
+      `Покупка ${package_.label} (${currency})`
     );
 
     const newBalance = user.credits + package_.credits;

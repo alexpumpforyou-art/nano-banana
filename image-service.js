@@ -6,14 +6,13 @@ class ImageService {
     // Модели для генерации изображений (приоритет: работающие → Gemini 3)
     // Gemini 3 пока может быть недоступна, поэтому пробуем сначала стабильные
     this.modelsToTry = [
-      'gemini-2.5-flash-image',           // Gemini 2.5 для изображений (стабильная)
-      'gemini-2.5-flash-image-preview',   // Preview версия
-      'gemini-2.0-flash-exp-image-generation', // Экспериментальная (fallback)
-      'gemini-3.0-flash-image',           // Gemini 3 для изображений (может быть недоступна)
-      'gemini-3.5-flash-image'            // Gemini 3.5 для изображений (может быть недоступна)
+      'imagen-3.0-generate-002',          // Imagen 3 (Latest Stable)
+      'imagen-3.0-generate-001',          // Imagen 3 (Previous)
+      'imagen-3.0-fast-generate-001',     // Imagen 3 Fast
+      'gemini-2.0-flash-exp-image-generation' // Fallback
     ];
     this.currentModelIndex = 0;
-    this.imageModel = this.genAI.getGenerativeModel({ 
+    this.imageModel = this.genAI.getGenerativeModel({
       model: this.modelsToTry[this.currentModelIndex]
     });
   }
@@ -30,96 +29,96 @@ class ImageService {
         const modelName = this.modelsToTry[this.currentModelIndex];
         console.log(`🎨 Генерирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
-        
+
         // Генерируем изображение с правильной конфигурацией
         const result = await this.imageModel.generateContent(prompt, {
           generationConfig: {
             response_modalities: ['IMAGE']
           }
         });
-      
-      const response = await result.response;
-      
-      // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
-      console.log('📋 Структура ответа API:');
-      console.log('response.candidates:', response.candidates?.length || 0);
-      if (response.candidates && response.candidates[0]) {
-        const candidate = response.candidates[0];
-        console.log('candidate.content:', !!candidate.content);
-        console.log('candidate.content.parts:', candidate.content?.parts?.length || 0);
-        
-        if (candidate.content?.parts) {
-          candidate.content.parts.forEach((part, i) => {
-            console.log(`Part ${i} keys:`, Object.keys(part));
-            if (part.text) console.log(`  - text: ${part.text.substring(0, 100)}...`);
-            if (part.inlineData) console.log(`  - inlineData.mimeType: ${part.inlineData.mimeType}`);
-          });
+
+        const response = await result.response;
+
+        // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
+        console.log('📋 Структура ответа API:');
+        console.log('response.candidates:', response.candidates?.length || 0);
+        if (response.candidates && response.candidates[0]) {
+          const candidate = response.candidates[0];
+          console.log('candidate.content:', !!candidate.content);
+          console.log('candidate.content.parts:', candidate.content?.parts?.length || 0);
+
+          if (candidate.content?.parts) {
+            candidate.content.parts.forEach((part, i) => {
+              console.log(`Part ${i} keys:`, Object.keys(part));
+              if (part.text) console.log(`  - text: ${part.text.substring(0, 100)}...`);
+              if (part.inlineData) console.log(`  - inlineData.mimeType: ${part.inlineData.mimeType}`);
+            });
+          }
         }
-      }
-      
-      // Получаем изображение из ответа
-      let imageBuffer = null;
-      
-      // Проверяем разные возможные форматы ответа
-      if (response.candidates && response.candidates[0]) {
-        const candidate = response.candidates[0];
-        
-        if (candidate.content && candidate.content.parts) {
-          for (const part of candidate.content.parts) {
-            if (part.inlineData && part.inlineData.data) {
-              // Изображение в base64
-              imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-              console.log(`✅ Изображение получено (${part.inlineData.mimeType}, ${imageBuffer.length} bytes)`);
-              break;
+
+        // Получаем изображение из ответа
+        let imageBuffer = null;
+
+        // Проверяем разные возможные форматы ответа
+        if (response.candidates && response.candidates[0]) {
+          const candidate = response.candidates[0];
+
+          if (candidate.content && candidate.content.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                // Изображение в base64
+                imageBuffer = Buffer.from(part.inlineData.data, 'base64');
+                console.log(`✅ Изображение получено (${part.inlineData.mimeType}, ${imageBuffer.length} bytes)`);
+                break;
+              }
             }
           }
         }
-      }
-      
-      if (!imageBuffer) {
-        console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} вернула только текст, не изображение`);
-        
-        // Пробуем следующую модель
+
+        if (!imageBuffer) {
+          console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} вернула только текст, не изображение`);
+
+          // Пробуем следующую модель
+          this.currentModelIndex++;
+          if (this.currentModelIndex < this.modelsToTry.length) {
+            console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
+            this.imageModel = this.genAI.getGenerativeModel({
+              model: this.modelsToTry[this.currentModelIndex]
+            });
+            continue; // Пробуем следующую модель
+          }
+
+          throw new Error('Ни одна модель не смогла сгенерировать изображение. Все модели возвращают только текст.');
+        }
+
+        // Примерный подсчет токенов
+        const tokensUsed = Math.ceil(prompt.length / 4) + 50; // +50 за генерацию изображения
+
+        console.log(`✅ Изображение сгенерировано успешно (${imageBuffer.length} bytes)`);
+
+        return {
+          imageBuffer,
+          tokensUsed,
+          success: true
+        };
+
+      } catch (error) {
+        console.error(`❌ Ошибка с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
+
+        // Пробуем следующую модель при ошибке
         this.currentModelIndex++;
         if (this.currentModelIndex < this.modelsToTry.length) {
           console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-          this.imageModel = this.genAI.getGenerativeModel({ 
+          this.imageModel = this.genAI.getGenerativeModel({
             model: this.modelsToTry[this.currentModelIndex]
           });
-          continue; // Пробуем следующую модель
+          continue;
         }
-        
-        throw new Error('Ни одна модель не смогла сгенерировать изображение. Все модели возвращают только текст.');
-      }
-      
-      // Примерный подсчет токенов
-      const tokensUsed = Math.ceil(prompt.length / 4) + 50; // +50 за генерацию изображения
 
-      console.log(`✅ Изображение сгенерировано успешно (${imageBuffer.length} bytes)`);
-      
-      return {
-        imageBuffer,
-        tokensUsed,
-        success: true
-      };
-      
-    } catch (error) {
-      console.error(`❌ Ошибка с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
-      
-      // Пробуем следующую модель при ошибке
-      this.currentModelIndex++;
-      if (this.currentModelIndex < this.modelsToTry.length) {
-        console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-        this.imageModel = this.genAI.getGenerativeModel({ 
-          model: this.modelsToTry[this.currentModelIndex]
-        });
-        continue;
+        throw new Error('Не удалось сгенерировать изображение: ' + error.message);
       }
-      
-      throw new Error('Не удалось сгенерировать изображение: ' + error.message);
     }
-    }
-    
+
     throw new Error('Ни одна модель генерации изображений не доступна для вашего API ключа');
   }
 
@@ -135,15 +134,15 @@ class ImageService {
         const modelName = this.modelsToTry[this.currentModelIndex];
         console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
-        
+
         // Конвертируем изображение в base64
         const base64Image = imageBuffer.toString('base64');
-        
+
         // Формируем детальный промпт для редактирования
         const editPrompt = `Отредактируй это изображение: ${prompt}. 
 ВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. 
 Не создавай новое изображение с нуля, а именно модифицируй это.`;
-        
+
         // Отправляем изображение + промпт для редактирования
         const result = await this.imageModel.generateContent([
           {
@@ -158,18 +157,18 @@ class ImageService {
             response_modalities: ['IMAGE']
           }
         });
-        
+
         const response = await result.response;
-        
+
         console.log('📋 Структура ответа (редактирование):');
         console.log('response.candidates:', response.candidates?.length || 0);
-        
+
         // Получаем отредактированное изображение
         let editedImageBuffer = null;
-        
+
         if (response.candidates && response.candidates[0]) {
           const candidate = response.candidates[0];
-          
+
           if (candidate.content && candidate.content.parts) {
             for (const part of candidate.content.parts) {
               if (part.inlineData && part.inlineData.data) {
@@ -180,47 +179,47 @@ class ImageService {
             }
           }
         }
-        
+
         if (!editedImageBuffer) {
           console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
-          
+
           // Пробуем следующую модель
           this.currentModelIndex++;
           if (this.currentModelIndex < this.modelsToTry.length) {
             console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-            this.imageModel = this.genAI.getGenerativeModel({ 
+            this.imageModel = this.genAI.getGenerativeModel({
               model: this.modelsToTry[this.currentModelIndex]
             });
             continue;
           }
-          
+
           throw new Error('Модель не смогла отредактировать изображение');
         }
-        
+
         const tokensUsed = Math.ceil(prompt.length / 4) + 50;
-        
+
         return {
           imageBuffer: editedImageBuffer,
           tokensUsed,
           success: true
         };
-        
+
       } catch (error) {
         console.error(`❌ Ошибка редактирования с моделью ${this.modelsToTry[this.currentModelIndex]}:`, error.message);
-        
+
         this.currentModelIndex++;
         if (this.currentModelIndex < this.modelsToTry.length) {
           console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-          this.imageModel = this.genAI.getGenerativeModel({ 
+          this.imageModel = this.genAI.getGenerativeModel({
             model: this.modelsToTry[this.currentModelIndex]
           });
           continue;
         }
-        
+
         throw new Error('Не удалось отредактировать изображение: ' + error.message);
       }
     }
-    
+
     throw new Error('Ни одна модель не смогла отредактировать изображение');
   }
 
@@ -236,11 +235,11 @@ class ImageService {
       'сгенерируй изображение', 'создай картинку',
       'покажи', 'визуализируй', 'иллюстрацию'
     ];
-    
+
     const lowerText = text.toLowerCase();
     return imageKeywords.some(keyword => lowerText.includes(keyword));
   }
-  
+
   /**
    * Проверяет является ли запрос командой редактирования
    * @param {string} text - Текст сообщения
@@ -252,7 +251,7 @@ class ImageService {
       'убери', 'удали', 'нарисуй ему', 'нарисуй ей',
       'раскрась', 'перекрась', 'поменяй'
     ];
-    
+
     const lowerText = text.toLowerCase();
     return editKeywords.some(keyword => lowerText.includes(keyword));
   }
@@ -269,7 +268,7 @@ class ImageService {
       .replace(/^(нарисуй|нарисовать|покажи|создай|сгенерируй)\s+/i, '')
       .replace(/^(картинку|фото|фотографию|изображение|рисунок)\s+/i, '')
       .trim();
-    
+
     return prompt || text;
   }
 }

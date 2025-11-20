@@ -7,18 +7,16 @@ class GeminiService {
     // Список моделей для автоматического перебора (приоритет: работающие → Gemini 3)
     // Gemini 3 пока может быть недоступна, поэтому пробуем сначала стабильные
     this.modelsToTry = [
-      'gemini-flash-latest',       // Автоматически последняя версия (работает)
-      'gemini-2.5-flash',          // Gemini 2.5 - стабильная
-      'gemini-2.5-pro',            // Gemini 2.5 Pro
-      'gemini-2.0-flash',          // Gemini 2.0 - fallback
-      'gemini-2.0-flash-lite',     // Легкая версия
-      'gemini-pro-latest',         // Последняя Pro версия
-      'gemini-3.0-flash',          // Gemini 3 - новая версия (может быть недоступна)
-      'gemini-3.5-flash',          // Gemini 3.5 - улучшенная версия (может быть недоступна)
-      'gemini-3.0-pro'             // Gemini 3 Pro - качественная версия (может быть недоступна)
+      'gemini-3.0-pro',            // Самая мощная модель (Nov 2025)
+      'gemini-3.0-flash',          // Быстрая новая модель
+      'gemini-2.5-pro',            // Стабильная мощная (fallback)
+      'gemini-2.5-flash',          // Стабильная быстрая
+      'gemini-2.0-flash',          // Предыдущее поколение
+      'gemini-1.5-pro',            // Legacy fallback
+      'gemini-1.5-flash'           // Legacy fallback
     ];
     this.currentModelIndex = 0;
-    this.model = this.genAI.getGenerativeModel({ 
+    this.model = this.genAI.getGenerativeModel({
       model: this.modelsToTry[this.currentModelIndex]
     });
   }
@@ -35,7 +33,7 @@ class GeminiService {
         const result = await this.model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
-        
+
         // Примерный подсчет токенов (4 символа ≈ 1 токен)
         const tokensUsed = Math.ceil((prompt.length + text.length) / 4);
 
@@ -47,24 +45,24 @@ class GeminiService {
         };
       } catch (error) {
         console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не работает:`, error.message);
-        
+
         // Если модель не найдена, квота исчерпана или перегружена, пробуем следующую
         if (error.message.includes('404') || error.message.includes('429') || error.message.includes('503') || error.message.includes('quota') || error.message.includes('overloaded')) {
           this.currentModelIndex++;
           if (this.currentModelIndex < this.modelsToTry.length) {
             console.log(`🔄 Переключаюсь на модель: ${this.modelsToTry[this.currentModelIndex]}`);
-            this.model = this.genAI.getGenerativeModel({ 
+            this.model = this.genAI.getGenerativeModel({
               model: this.modelsToTry[this.currentModelIndex]
             });
             continue; // Пробуем следующую модель
           }
         }
-        
+
         // Если перепробовали все модели или другая ошибка
         throw new Error('Не удалось сгенерировать ответ: ' + error.message);
       }
     }
-    
+
     throw new Error('Ни одна модель Gemini не доступна для вашего API ключа');
   }
 
