@@ -23,6 +23,7 @@ const bot = new TelegramBot(token, {
 // Принудительно удаляем вебхук перед стартом polling
 bot.deleteWebHook().then(() => {
   console.log('✅ Вебхук удален, используется polling');
+  console.log('🚀 BOT VERSION: 1.1 (Stars Fix Applied)');
 });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
