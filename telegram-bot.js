@@ -4,7 +4,26 @@ const GeminiService = require('./gemini-service');
 const ImageService = require('./image-service');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token, {
+  polling: {
+    interval: 300,
+    autoStart: true,
+    params: {
+      timeout: 10,
+      allowed_updates: [
+        'message',
+        'callback_query',
+        'pre_checkout_query',
+        'successful_payment'
+      ]
+    }
+  }
+});
+
+// Принудительно удаляем вебхук перед стартом polling
+bot.deleteWebHook().then(() => {
+  console.log('✅ Вебхук удален, используется polling');
+});
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
@@ -24,35 +43,35 @@ const PRICES = {
 
 // Генерируем пакеты кредитов динамически на основе CREDITS_PER_STAR
 const CREDIT_PACKAGES = [
-  { 
-    stars: 1, 
-    credits: CREDITS_PER_STAR * 1, 
+  {
+    stars: 1,
+    credits: CREDITS_PER_STAR * 1,
     label: `${CREDITS_PER_STAR} кредитов`,
-    description: 'Базовый' 
+    description: 'Базовый'
   },
-  { 
-    stars: 5, 
-    credits: Math.floor(CREDITS_PER_STAR * 5 * 1.1), 
+  {
+    stars: 5,
+    credits: Math.floor(CREDITS_PER_STAR * 5 * 1.1),
     label: `${Math.floor(CREDITS_PER_STAR * 5 * 1.1)} кредитов`,
-    description: '+10% 💎' 
+    description: '+10% 💎'
   },
-  { 
-    stars: 10, 
-    credits: Math.floor(CREDITS_PER_STAR * 10 * 1.2), 
+  {
+    stars: 10,
+    credits: Math.floor(CREDITS_PER_STAR * 10 * 1.2),
     label: `${Math.floor(CREDITS_PER_STAR * 10 * 1.2)} кредитов`,
-    description: '+20% 💎' 
+    description: '+20% 💎'
   },
-  { 
-    stars: 25, 
-    credits: Math.floor(CREDITS_PER_STAR * 25 * 1.3), 
+  {
+    stars: 25,
+    credits: Math.floor(CREDITS_PER_STAR * 25 * 1.3),
     label: `${Math.floor(CREDITS_PER_STAR * 25 * 1.3)} кредитов`,
-    description: '+30% 💎' 
+    description: '+30% 💎'
   },
-  { 
-    stars: 50, 
-    credits: Math.floor(CREDITS_PER_STAR * 50 * 1.5), 
+  {
+    stars: 50,
+    credits: Math.floor(CREDITS_PER_STAR * 50 * 1.5),
     label: `${Math.floor(CREDITS_PER_STAR * 50 * 1.5)} кредитов`,
-    description: '+50% 🔥' 
+    description: '+50% 🔥'
   },
 ];
 
@@ -90,10 +109,10 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
 
   try {
     await deleteOldMessages(chatId); // Удаляем старые сообщения
-    
+
     let user = userQueries.getByTelegramId.get(chatId.toString());
     let isNewUser = false;
-    
+
     if (!user) {
       // Новый пользователь - создаем с реферальным кодом
       const newReferralCode = generateReferralCode();
@@ -104,20 +123,20 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
         newReferralCode
       );
       isNewUser = true;
-      
+
       // Если пришел по реферальной ссылке
       if (referralCode) {
         const referrer = userQueries.getByReferralCode.get(referralCode);
         if (referrer && referrer.telegram_id !== chatId.toString()) {
           // Устанавливаем реферера
           userQueries.setReferrer.run(referrer.id, user.id);
-          
+
           // Начисляем бонус рефереру
           userQueries.addReferralBonus.run(REFERRAL_BONUS, REFERRAL_BONUS, referrer.id);
-          
+
           // Записываем в таблицу рефералов
           referralQueries.create.run(referrer.id, user.id, REFERRAL_BONUS);
-          
+
           // Уведомляем реферера
           try {
             await bot.sendMessage(
@@ -125,7 +144,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
               `🎉 По вашей ссылке зарегистрировался новый пользователь!\n\n💎 +${REFERRAL_BONUS} кредитов в подарок!`
             );
           } catch (e) { /* Игнорируем если не удалось отправить */ }
-          
+
           console.log(`👥 Новый реферал: ${username} (реферер: ${referrer.username})`);
         }
       }
@@ -134,19 +153,19 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     // Получаем динамический контент приветствия
     let welcomeContent = contentQueries.getByType.get('welcome');
     let welcomeText = welcomeContent?.text || `🍌 ${isNewUser ? 'Добро пожаловать' : 'С возвращением'} в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:`;
-    
+
     // Заменяем переменные
     welcomeText = welcomeText
       .replace(/{credits}/g, user.credits)
       .replace(/{generations}/g, user.total_generations || 0)
       .replace(/{username}/g, username);
-    
+
     // Добавляем реферальную ссылку если есть
     if (user.referral_code) {
       const botInfo = await bot.getMe();
       welcomeText += `\n🔗 Ваша реферальная ссылка:\nt.me/${botInfo.username}?start=${user.referral_code}`;
     }
-    
+
     // Конвертируем Markdown форматирование в HTML для безопасности
     // Заменяем *текст* на <b>текст</b> и экранируем HTML символы
     welcomeText = welcomeText
@@ -173,7 +192,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
         ]
       ]
     };
-    
+
     if (ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID) {
       keyboard.inline_keyboard.push([
         { text: '👑 Админ-панель', callback_data: 'menu_admin' }
@@ -208,15 +227,15 @@ bot.onText(/\/balance/, async (msg) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
     const refCount = userQueries.countReferrals.get(user.id);
-    
+
     const balanceText = `
 💎 *Ваша статистика*
 
@@ -242,9 +261,9 @@ bot.onText(/\/buy/, async (msg) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
@@ -270,7 +289,7 @@ bot.onText(/\/buy/, async (msg) => {
       priceInfo,
       { reply_markup: keyboard, parse_mode: 'Markdown' }
     );
-    
+
     const messages = userLastMessages.get(chatId) || [];
     messages.push(sentMsg.message_id);
     userLastMessages.set(chatId, messages);
@@ -285,7 +304,7 @@ bot.onText(/\/history/, async (msg) => {
 
   try {
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
@@ -355,29 +374,29 @@ bot.onText(/\/stats/, async (msg) => {
 
   try {
     const db = require('./database');
-    
+
     // Общая статистика пользователей
     const totalUsers = db.db.prepare('SELECT COUNT(*) as count FROM users').get();
-    
+
     // Общая статистика транзакций
     const totalPurchases = db.db.prepare(`
       SELECT COUNT(*) as count, SUM(amount) as total_stars 
       FROM transactions WHERE type = 'purchase'
     `).get();
-    
+
     // Общая статистика генераций
     const totalGenerations = db.db.prepare(`
       SELECT COUNT(*) as count, SUM(credits_used) as total_credits 
       FROM generations
     `).get();
-    
+
     // Генерации за последние 24 часа
     const recentGens = db.db.prepare(`
       SELECT COUNT(*) as count 
       FROM generations 
       WHERE created_at > datetime('now', '-1 day')
     `).get();
-    
+
     // Топ пользователей по покупкам
     const topBuyers = db.db.prepare(`
       SELECT u.username, SUM(t.amount) as total_spent
@@ -388,28 +407,28 @@ bot.onText(/\/stats/, async (msg) => {
       ORDER BY total_spent DESC
       LIMIT 5
     `).all();
-    
+
     // Средний чек
-    const avgPurchase = totalPurchases.total_stars && totalPurchases.count 
+    const avgPurchase = totalPurchases.total_stars && totalPurchases.count
       ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1)
       : 0;
-    
+
     // Формируем отчет
     let statsText = `📊 *Статистика Nano Banana*\n\n`;
-    
+
     statsText += `👥 *Пользователи:*\n`;
     statsText += `└ Всего: ${totalUsers.count}\n\n`;
-    
+
     statsText += `💰 *Продажи:*\n`;
     statsText += `└ Всего покупок: ${totalPurchases.count || 0}\n`;
     statsText += `└ Заработано: ${totalPurchases.total_stars || 0} ⭐\n`;
     statsText += `└ Средний чек: ${avgPurchase} ⭐\n\n`;
-    
+
     statsText += `🤖 *Генерации:*\n`;
     statsText += `└ Всего: ${totalGenerations.count || 0}\n`;
     statsText += `└ Использовано кредитов: ${(totalGenerations.total_credits || 0).toLocaleString('ru-RU')}\n`;
     statsText += `└ За 24 часа: ${recentGens.count || 0}\n\n`;
-    
+
     if (topBuyers.length > 0) {
       statsText += `🏆 *Топ покупателей:*\n`;
       topBuyers.forEach((buyer, idx) => {
@@ -417,23 +436,23 @@ bot.onText(/\/stats/, async (msg) => {
       });
       statsText += `\n`;
     }
-    
+
     // Расчет примерного дохода
     const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01; // $0.01 за Star
     const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15; // кредиты * 50 = токены, примерная стоимость API
     const estimatedProfit = estimatedRevenue - estimatedCost;
-    
+
     statsText += `💵 *Финансы (приблизительно):*\n`;
     statsText += `└ Доход: $${estimatedRevenue.toFixed(2)}\n`;
     statsText += `└ Затраты API: $${estimatedCost.toFixed(2)}\n`;
     statsText += `└ Прибыль: $${estimatedProfit.toFixed(2)}\n\n`;
-    
+
     statsText += `⚙️ *Настройки:*\n`;
     statsText += `└ Кредитов за Star: ${CREDITS_PER_STAR}\n`;
     statsText += `└ Бесплатных кредитов: ${FREE_CREDITS}\n`;
-    
+
     await bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
-    
+
   } catch (error) {
     console.error('Ошибка в /stats:', error);
     await bot.sendMessage(chatId, '❌ Ошибка при получении статистики.');
@@ -445,19 +464,19 @@ bot.onText(/\/referral/, async (msg) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
     const referrals = userQueries.getReferrals.all(user.id);
     const refCount = referrals.length;
-    
+
     // Получаем имя бота для ссылки
     const botInfo = await bot.getMe();
-    
+
     let referralText = `
 👥 *Реферальная программа*
 
@@ -493,10 +512,10 @@ bot.onText(/\/referral/, async (msg) => {
 
 bot.onText(/\/paysupport/, async (msg) => {
   const chatId = msg.chat.id;
-  
+
   try {
     await deleteOldMessages(chatId);
-    
+
     const supportText = `
 💳 *Поддержка по оплате*
 
@@ -557,10 +576,10 @@ bot.onText(/\/paysupport/, async (msg) => {
 
 bot.onText(/\/support/, async (msg) => {
   const chatId = msg.chat.id;
-  
+
   try {
     await deleteOldMessages(chatId);
-    
+
     const supportText = `
 📞 *Поддержка Nano Banana*
 
@@ -619,10 +638,10 @@ bot.onText(/\/support/, async (msg) => {
 
 bot.onText(/\/terms/, async (msg) => {
   const chatId = msg.chat.id;
-  
+
   try {
     await deleteOldMessages(chatId);
-    
+
     const termsText = `
 📋 *Условия использования Nano Banana*
 
@@ -735,7 +754,7 @@ bot.onText(/\/admin/, async (msg) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const adminText = `
 👑 *Панель администратора*
 
@@ -769,15 +788,15 @@ bot.onText(/\/adminuser\s+(\S+)/, async (msg, match) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(targetTelegramId);
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
 
     const refCount = userQueries.countReferrals.get(user.id);
-    
+
     const userInfo = `
 👤 *Информация о пользователе*
 
@@ -810,9 +829,9 @@ bot.onText(/\/adminadd\s+(\S+)\s+(\d+)/, async (msg, match) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(targetTelegramId);
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
@@ -838,9 +857,9 @@ bot.onText(/\/adminblock\s+(\S+)/, async (msg, match) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(targetTelegramId);
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
@@ -863,9 +882,9 @@ bot.onText(/\/adminunblock\s+(\S+)/, async (msg, match) => {
 
   try {
     await deleteOldMessages(chatId);
-    
+
     const user = userQueries.getByTelegramId.get(targetTelegramId);
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
@@ -898,13 +917,13 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_balance') {
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
       const refCount = userQueries.countReferrals.get(user.id);
-      
+
       const balanceText = `
 💎 *Ваша статистика*
 
@@ -931,7 +950,7 @@ bot.on('callback_query', async (query) => {
   } else if (data === 'menu_buy') {
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
@@ -956,7 +975,7 @@ bot.on('callback_query', async (query) => {
 
       await bot.answerCallbackQuery(query.id);
       const sentMsg = await bot.sendMessage(chatId, priceInfo, { reply_markup: keyboard, parse_mode: 'Markdown' });
-      
+
       const messages = userLastMessages.get(chatId) || [];
       messages.push(sentMsg.message_id);
       userLastMessages.set(chatId, messages);
@@ -967,17 +986,17 @@ bot.on('callback_query', async (query) => {
   } else if (data === 'menu_referral') {
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
       const referrals = userQueries.getReferrals.all(user.id);
       const refCount = referrals.length;
-      
+
       // Получаем имя бота для ссылки
       const botInfo = await bot.getMe();
-      
+
       let referralText = `
 👥 *Реферальная программа*
 
@@ -1015,7 +1034,7 @@ bot.on('callback_query', async (query) => {
   } else if (data === 'menu_history') {
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
@@ -1133,19 +1152,19 @@ bot.on('callback_query', async (query) => {
 
     try {
       await bot.answerCallbackQuery(query.id);
-      
+
       const db = require('./database');
-      
+
       const totalUsers = db.db.prepare('SELECT COUNT(*) as count FROM users').get();
       const totalPurchases = db.db.prepare(`SELECT COUNT(*) as count, SUM(amount) as total_stars FROM transactions WHERE type = 'purchase'`).get();
       const totalGenerations = db.db.prepare(`SELECT COUNT(*) as count, SUM(credits_used) as total_credits FROM generations`).get();
       const recentGens = db.db.prepare(`SELECT COUNT(*) as count FROM generations WHERE created_at > datetime('now', '-1 day')`).get();
-      
+
       const avgPurchase = totalPurchases.total_stars && totalPurchases.count ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1) : 0;
       const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01;
       const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15;
       const estimatedProfit = estimatedRevenue - estimatedCost;
-      
+
       let statsText = `📊 *Статистика Nano Banana*\n\n`;
       statsText += `👥 Пользователей: ${totalUsers.count}\n\n`;
       statsText += `💰 *Продажи:*\n`;
@@ -1160,11 +1179,11 @@ bot.on('callback_query', async (query) => {
       statsText += `└ Доход: $${estimatedRevenue.toFixed(2)}\n`;
       statsText += `└ Затраты: $${estimatedCost.toFixed(2)}\n`;
       statsText += `└ Прибыль: $${estimatedProfit.toFixed(2)}`;
-      
+
       const backButton = {
         inline_keyboard: [[{ text: '◀️ Назад', callback_data: 'menu_admin' }]]
       };
-      
+
       await sendAndRemember(chatId, statsText, { parse_mode: 'Markdown', reply_markup: backButton });
     } catch (error) {
       console.error('Ошибка admin_stats:', error);
@@ -1174,19 +1193,19 @@ bot.on('callback_query', async (query) => {
     // Возвращаемся в главное меню
     try {
       await bot.answerCallbackQuery(query.id);
-      
+
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       // Используем динамический контент приветствия
       const welcomeContent = contentQueries.getByType.get('welcome');
       let welcomeText = welcomeContent?.text || `🍌 С возвращением в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:`;
-      
+
       // Заменяем переменные
       welcomeText = welcomeText
         .replace(/{credits}/g, user.credits)
         .replace(/{generations}/g, user.total_generations || 0)
         .replace(/{username}/g, user.username || 'пользователь');
-      
+
       // Конвертируем Markdown в HTML для безопасности
       welcomeText = welcomeText
         .replace(/&/g, '&amp;')
@@ -1212,13 +1231,13 @@ bot.on('callback_query', async (query) => {
           ]
         ]
       };
-      
+
       if (ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID) {
         keyboard.inline_keyboard.push([
           { text: '👑 Админ-панель', callback_data: 'menu_admin' }
         ]);
       }
-      
+
       await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'HTML' });
     } catch (error) {
       console.error('Ошибка menu_back:', error);
@@ -1227,17 +1246,17 @@ bot.on('callback_query', async (query) => {
     // Обработка проверки баланса
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
-        return await bot.answerCallbackQuery(query.id, { 
-          text: 'Используйте /start для начала работы.', 
-          show_alert: true 
+        return await bot.answerCallbackQuery(query.id, {
+          text: 'Используйте /start для начала работы.',
+          show_alert: true
         });
       }
 
-      await bot.answerCallbackQuery(query.id, { 
-        text: `💎 Ваш баланс: ${user.credits} кредитов`, 
-        show_alert: true 
+      await bot.answerCallbackQuery(query.id, {
+        text: `💎 Ваш баланс: ${user.credits} кредитов`,
+        show_alert: true
       });
     } catch (error) {
       console.error('Ошибка проверки баланса:', error);
@@ -1256,7 +1275,7 @@ bot.on('callback_query', async (query) => {
 
     try {
       console.log(`📦 Создаем инвойс для пакета:`, package_);
-      
+
       // Отправляем инвойс для оплаты Stars
       const invoice = await bot.sendInvoice(
         chatId,
@@ -1279,16 +1298,16 @@ bot.on('callback_query', async (query) => {
       console.log('   Message ID:', invoice.message_id);
       console.log('   Chat ID:', invoice.chat.id);
       console.log('   ⚠️ ВАЖНО: Теперь ждем pre_checkout_query от пользователя...');
-      
+
       await bot.answerCallbackQuery(query.id, { text: '💳 Инвойс отправлен! Проверьте чат.' });
     } catch (error) {
       console.error('❌ Ошибка создания инвойса:', error);
       console.error('Детали:', error.response?.body || error.message);
       console.error('Stack:', error.stack);
-      
-      await bot.answerCallbackQuery(query.id, { 
-        text: `❌ Ошибка: ${error.message}`, 
-        show_alert: true 
+
+      await bot.answerCallbackQuery(query.id, {
+        text: `❌ Ошибка: ${error.message}`,
+        show_alert: true
       });
     }
   } else if (data === 'contact_support') {
@@ -1305,9 +1324,9 @@ bot.on('callback_query', async (query) => {
     await bot.sendMessage(chatId, '/terms');
   } else if (data === 'accept_terms') {
     // Кнопка "Принимаю условия"
-    await bot.answerCallbackQuery(query.id, { 
-      text: '✅ Спасибо! Условия приняты.', 
-      show_alert: true 
+    await bot.answerCallbackQuery(query.id, {
+      text: '✅ Спасибо! Условия приняты.',
+      show_alert: true
     });
   } else if (data === 'support_payment') {
     // Кнопка "Оплата" в поддержке
@@ -1328,20 +1347,20 @@ bot.on('pre_checkout_query', async (query) => {
   console.log('Currency:', query.currency);
   console.log('Total amount:', query.total_amount);
   console.log('Invoice payload:', query.invoice_payload);
-  
+
   try {
     console.log('✅ Отправляем answerPreCheckoutQuery(true)...');
-    
+
     const result = await bot.answerPreCheckoutQuery(query.id, true);
-    
+
     console.log('✅ answerPreCheckoutQuery выполнен успешно!', result);
   } catch (error) {
     console.error('❌ Ошибка pre_checkout:', error);
     console.error('Stack:', error.stack);
-    
+
     try {
-      await bot.answerPreCheckoutQuery(query.id, false, { 
-        error_message: 'Ошибка обработки платежа. Попробуйте позже.' 
+      await bot.answerPreCheckoutQuery(query.id, false, {
+        error_message: 'Ошибка обработки платежа. Попробуйте позже.'
       });
     } catch (e) {
       console.error('❌ Не удалось отправить отказ:', e);
@@ -1358,14 +1377,14 @@ bot.on('successful_payment', async (msg) => {
 
   try {
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       console.error(`❌ Пользователь ${chatId} не найден после успешной оплаты`);
       return await bot.sendMessage(chatId, '❌ Пользователь не найден. Используйте /start');
     }
 
     const package_ = CREDIT_PACKAGES.find(p => p.stars === stars);
-    
+
     if (!package_) {
       console.error(`❌ Пакет не найден для ${stars} Stars`);
       return await bot.sendMessage(chatId, '❌ Пакет не найден.');
@@ -1387,7 +1406,7 @@ bot.on('successful_payment', async (msg) => {
 
     console.log(`✅ Кредиты начислены: ${package_.credits} → баланс: ${newBalance}`);
 
-    const successMessage = 
+    const successMessage =
       `✅ *Платеж успешно обработан!*\n\n` +
       `💎 Начислено: ${package_.credits} кредитов\n` +
       `💎 Новый баланс: ${newBalance} кредитов\n\n` +
@@ -1395,7 +1414,7 @@ bot.on('successful_payment', async (msg) => {
       `Теперь вы можете генерировать еще больше контента.`;
 
     await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
-    
+
     // Отправляем дополнительные кнопки быстрого доступа
     const quickActions = {
       inline_keyboard: [
@@ -1403,17 +1422,17 @@ bot.on('successful_payment', async (msg) => {
         [{ text: '💎 Баланс', callback_data: 'check_balance' }]
       ]
     };
-    
+
     await bot.sendMessage(
       chatId,
       '🚀 Что хотите создать?',
       { reply_markup: quickActions }
     );
-    
+
   } catch (error) {
     console.error('Ошибка обработки платежа:', error);
     await bot.sendMessage(
-      chatId, 
+      chatId,
       '❌ Ошибка при начислении кредитов. Пожалуйста, свяжитесь с поддержкой и сообщите код ошибки: PAY_ERR_' + Date.now()
     );
   }
@@ -1424,7 +1443,7 @@ bot.on('successful_payment', async (msg) => {
 bot.on('message', async (msg) => {
   // Игнорируем команды
   if (msg.text && msg.text.startsWith('/')) return;
-  
+
   // Игнорируем системные сообщения
   if (msg.successful_payment) return;
 
@@ -1433,13 +1452,13 @@ bot.on('message', async (msg) => {
 
   // Проверяем есть ли фото в сообщении
   const hasPhoto = msg.photo && msg.photo.length > 0;
-  
+
   // Если есть фото И текст (любой) - это запрос на редактирование
   if (hasPhoto && prompt && prompt.trim().length > 0) {
     // ==================== РЕДАКТИРОВАНИЕ ИЗОБРАЖЕНИЯ ====================
     try {
       const user = userQueries.getByTelegramId.get(chatId.toString());
-      
+
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
@@ -1448,7 +1467,7 @@ bot.on('message', async (msg) => {
       if (user.is_blocked) {
         return await bot.sendMessage(chatId, '❌ Ваш аккаунт заблокирован. Обратитесь в поддержку.');
       }
-      
+
       // Проверяем баланс
       if (user.credits < PRICES.IMAGE_EDIT) {
         return await bot.sendMessage(
@@ -1458,14 +1477,14 @@ bot.on('message', async (msg) => {
       }
 
       await bot.sendChatAction(chatId, 'upload_photo');
-      
+
       console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
       await bot.sendMessage(chatId, '✏️ Редактирую изображение, подождите...');
-      
+
       // Скачиваем фото (берём самое большое)
       const photo = msg.photo[msg.photo.length - 1];
       const fileLink = await bot.getFileLink(photo.file_id);
-      
+
       // Загружаем изображение
       const https = require('https');
       const imageBuffer = await new Promise((resolve, reject) => {
@@ -1475,25 +1494,25 @@ bot.on('message', async (msg) => {
           response.on('end', () => resolve(Buffer.concat(chunks)));
         }).on('error', reject);
       });
-      
+
       console.log(`📥 Изображение загружено (${imageBuffer.length} bytes)`);
-      
+
       // Редактируем изображение
       const result = await imageService.editImage(imageBuffer, prompt);
-      
+
       const creditsUsed = PRICES.IMAGE_EDIT;
-      
+
       // Списываем кредиты
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
-      
+
       // Сохраняем с изображением в base64
       const imageBase64 = result.imageBuffer.toString('base64');
       generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit', imageBase64);
       transactionQueries.create.run(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
-      
+
       const newBalance = user.credits - creditsUsed;
-      
+
       // Отправляем отредактированное изображение
       try {
         await bot.sendPhoto(chatId, result.imageBuffer, {
@@ -1506,16 +1525,16 @@ bot.on('message', async (msg) => {
           `✏️ Изображение отредактировано, но ошибка при отправке.\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
         );
       }
-      
+
       return; // Выходим, обработка завершена
-      
+
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
       await bot.sendMessage(chatId, '❌ Произошла ошибка при редактировании изображения.');
       return;
     }
   }
-  
+
   // Если просто фото без команды редактирования - игнорируем
   if (hasPhoto && !prompt) {
     return;
@@ -1527,7 +1546,7 @@ bot.on('message', async (msg) => {
 
   try {
     const user = userQueries.getByTelegramId.get(chatId.toString());
-    
+
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
@@ -1536,7 +1555,7 @@ bot.on('message', async (msg) => {
     if (user.is_blocked) {
       return await bot.sendMessage(chatId, '❌ Ваш аккаунт заблокирован. Обратитесь в поддержку.');
     }
-    
+
     // Проверяем баланс
     if (user.credits <= 0) {
       return await bot.sendMessage(
@@ -1547,16 +1566,16 @@ bot.on('message', async (msg) => {
 
     // Проверяем, это запрос на генерацию изображения?
     const isImageRequest = ImageService.isImageRequest(prompt);
-    
+
     if (isImageRequest) {
       // Генерация изображения
       await bot.sendChatAction(chatId, 'upload_photo');
-      
+
       const imagePrompt = ImageService.extractImagePrompt(prompt);
       console.log(`🎨 Запрос на генерацию изображения: "${imagePrompt}"`);
-      
+
       const creditsUsed = PRICES.IMAGE_GEN;
-      
+
       // Проверяем баланс
       if (user.credits < creditsUsed) {
         return await bot.sendMessage(
@@ -1564,17 +1583,17 @@ bot.on('message', async (msg) => {
           `❌ Недостаточно кредитов.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
         );
       }
-      
+
       const result = await imageService.generateImage(imagePrompt);
-      
+
       // Списываем кредиты
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
-      
+
       // Сохраняем генерацию с изображением в base64
       const imageBase64 = result.imageBuffer.toString('base64');
       generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
-      
+
       // Сохраняем транзакцию
       transactionQueries.create.run(
         user.id,
@@ -1583,9 +1602,9 @@ bot.on('message', async (msg) => {
         0,
         'Генерация изображения'
       );
-      
+
       const newBalance = user.credits - creditsUsed;
-      
+
       // Отправляем изображение
       try {
         await bot.sendPhoto(chatId, result.imageBuffer, {
@@ -1601,13 +1620,13 @@ bot.on('message', async (msg) => {
     } else {
       // Обычная генерация текста
       await bot.sendChatAction(chatId, 'typing');
-      
+
       const result = await gemini.generate(prompt);
-      
+
       // Определяем стоимость на основе длины ответа
       const responseLength = result.text.length;
       const creditsUsed = responseLength > 500 ? PRICES.TEXT_LONG : PRICES.TEXT_SHORT;
-      
+
       // Проверяем, хватит ли кредитов
       if (user.credits < creditsUsed) {
         return await bot.sendMessage(
@@ -1615,14 +1634,14 @@ bot.on('message', async (msg) => {
           `❌ Недостаточно кредитов для этого запроса.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
         );
       }
-      
+
       // Списываем кредиты
       userQueries.updateCredits.run(-creditsUsed, user.id);
       userQueries.incrementGenerations.run(creditsUsed, user.id);
-      
+
       // Сохраняем генерацию (image_data = null для текста)
       generationQueries.create.run(user.id, prompt, result.text, creditsUsed, 'text', null);
-      
+
       // Сохраняем транзакцию
       transactionQueries.create.run(
         user.id,
@@ -1631,9 +1650,9 @@ bot.on('message', async (msg) => {
         0,
         'Генерация текста'
       );
-      
+
       const newBalance = user.credits - creditsUsed;
-      
+
       // Отправляем ответ
       await bot.sendMessage(
         chatId,
