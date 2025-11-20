@@ -164,61 +164,66 @@ class ImageService {
         console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
 
-        // Конвертируем изображение в base64
-        const base64Image = imageBuffer.toString('base64');
-
-        // Формируем детальный промпт для редактирования
-        const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
-
-        // Используем Gemini модель для редактирования
-        const editModel = this.genAI.getGenerativeModel({ model: modelName });
-
-        const result = await editModel.generateContent([
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: 'image/jpeg' // или определять автоматически
-            }
-          },
-          { text: editPrompt }
-        ], {
-          // generationConfig: {
-          //   response_modalities: ['IMAGE'] // Убираем ограничение, чтобы видеть текст ошибки если есть
-          // },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-          ]
-        });
-
-        const response = await result.response;
-
-        console.log('📋 Структура ответа (редактирование):');
-        console.log('response.candidates:', response.candidates?.length || 0);
-        if (response.promptFeedback) {
-          console.log('⚠️ Prompt Feedback:', JSON.stringify(response.promptFeedback, null, 2));
-        }
-
-        // Получаем отредактированное изображение
         let editedImageBuffer = null;
 
-        if (response.candidates && response.candidates[0]) {
-          const candidate = response.candidates[0];
+        if (modelName.startsWith('imagen-')) {
+          // Use REST API for Imagen
+          editedImageBuffer = await this.editImageViaRest(modelName, imageBuffer, prompt);
+        } else {
+          // Use Gemini SDK
+          // Конвертируем изображение в base64
+          const base64Image = imageBuffer.toString('base64');
 
-          if (candidate.finishReason !== 'STOP') {
-            console.log('⚠️ Finish Reason:', candidate.finishReason);
+          // Формируем детальный промпт для редактирования
+          const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
+
+          // Используем Gemini модель для редактирования
+          const editModel = this.genAI.getGenerativeModel({ model: modelName });
+
+          const result = await editModel.generateContent([
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: 'image/jpeg' // или определять автоматически
+              }
+            },
+            { text: editPrompt }
+          ], {
+            // generationConfig: {
+            //   response_modalities: ['IMAGE'] // Убираем ограничение, чтобы видеть текст ошибки если есть
+            // },
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+            ]
+          });
+
+          const response = await result.response;
+
+          console.log('📋 Структура ответа (редактирование):');
+          console.log('response.candidates:', response.candidates?.length || 0);
+          if (response.promptFeedback) {
+            console.log('⚠️ Prompt Feedback:', JSON.stringify(response.promptFeedback, null, 2));
           }
 
-          if (candidate.content && candidate.content.parts) {
-            for (const part of candidate.content.parts) {
-              if (part.inlineData && part.inlineData.data) {
-                editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
-                console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
-                break;
-              } else if (part.text) {
-                console.log(`ℹ️ Модель вернула текст вместо изображения: "${part.text}"`);
+          if (response.candidates && response.candidates[0]) {
+            const candidate = response.candidates[0];
+
+            if (candidate.finishReason !== 'STOP') {
+              console.log('⚠️ Finish Reason:', candidate.finishReason);
+            }
+
+            if (candidate.content && candidate.content.parts) {
+              for (const part of candidate.content.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                  editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
+                  console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
+                  break;
+                } else if (part.text) {
+                  console.log(`ℹ️ Модель вернула текст вместо изображения: "${part.text}"`);
+                }
               }
             }
           }
@@ -226,8 +231,7 @@ class ImageService {
 
         if (!editedImageBuffer) {
           console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
-          // Если модель вернула текст, можно было бы его вернуть пользователю, но пока просто ошибку
-          throw new Error('Модель не вернула изображение (возможно, отказалась редактировать)');
+          throw new Error('Модель вернула пустой результат (возможно, только текст)');
         }
 
         const tokensUsed = Math.ceil(prompt.length / 4) + 50;
