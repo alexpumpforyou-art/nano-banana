@@ -11,7 +11,18 @@ class ImageService {
       'imagen-3.0-generate-001',          // Imagen 3
       'gemini-2.0-flash-exp'              // Fallback text-to-image
     ];
+
+    // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
+    // Imagen 4 пока не поддерживает image input через predict, поэтому используем Gemini
+    this.editingModels = [
+      'gemini-2.0-flash-exp',      // Multimodal (Image+Text -> Text/Image?)
+      'gemini-1.5-pro',            // Multimodal
+      'gemini-1.5-flash'           // Multimodal
+    ];
+
     this.currentModelIndex = 0;
+    this.currentEditModelIndex = 0; // Separate index for editing
+
     this.imageModel = this.genAI.getGenerativeModel({
       model: this.modelsToTry[this.currentModelIndex]
     });
