@@ -971,10 +971,10 @@ bot.on('callback_query', async (query) => {
 
       const keyboard = {
         inline_keyboard: [
-          ...CREDIT_PACKAGES.map(pkg => [{
-            text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
-            callback_data: `buy_${pkg.stars}`
-          }]),
+          [
+            { text: '⭐ Telegram Stars', callback_data: 'buy_method_stars' },
+            { text: '💳 Рубли (ЮKassa)', callback_data: 'buy_method_rub' }
+          ],
           [{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]
         ]
       };
