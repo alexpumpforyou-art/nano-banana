@@ -244,12 +244,12 @@ class ImageService {
     }
 
     // 2. Fallback: Describe + Generate (Имитация редактирования)
-    // Используем Gemini 1.5 Flash для описания картинки с учетом изменений, затем Imagen 4 для генерации
+    // Используем Gemini 2.0 Flash для описания картинки с учетом изменений, затем Imagen 4 для генерации
     try {
       console.log(`🔄 Запуск Fallback: Describe + Generate...`);
 
       // Шаг 1: Описание новой картинки
-      const describeModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const describeModel = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const base64Image = imageBuffer.toString('base64');
       const describePrompt = `Посмотри на это изображение. Пользователь хочет изменить его так: "${prompt}".
       
