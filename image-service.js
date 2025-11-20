@@ -180,9 +180,9 @@ class ImageService {
           },
           { text: editPrompt }
         ], {
-          generationConfig: {
-            response_modalities: ['IMAGE']
-          },
+          // generationConfig: {
+          //   response_modalities: ['IMAGE'] // Убираем ограничение, чтобы видеть текст ошибки если есть
+          // },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -195,6 +195,9 @@ class ImageService {
 
         console.log('📋 Структура ответа (редактирование):');
         console.log('response.candidates:', response.candidates?.length || 0);
+        if (response.promptFeedback) {
+          console.log('⚠️ Prompt Feedback:', JSON.stringify(response.promptFeedback, null, 2));
+        }
 
         // Получаем отредактированное изображение
         let editedImageBuffer = null;
@@ -202,12 +205,18 @@ class ImageService {
         if (response.candidates && response.candidates[0]) {
           const candidate = response.candidates[0];
 
+          if (candidate.finishReason !== 'STOP') {
+            console.log('⚠️ Finish Reason:', candidate.finishReason);
+          }
+
           if (candidate.content && candidate.content.parts) {
             for (const part of candidate.content.parts) {
               if (part.inlineData && part.inlineData.data) {
                 editedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
                 console.log(`✅ Изображение отредактировано (${part.inlineData.mimeType}, ${editedImageBuffer.length} bytes)`);
                 break;
+              } else if (part.text) {
+                console.log(`ℹ️ Модель вернула текст вместо изображения: "${part.text}"`);
               }
             }
           }
@@ -215,7 +224,8 @@ class ImageService {
 
         if (!editedImageBuffer) {
           console.error(`❌ Модель ${modelName} не вернула отредактированное изображение`);
-          throw new Error('Модель вернула пустой результат (возможно, только текст)');
+          // Если модель вернула текст, можно было бы его вернуть пользователю, но пока просто ошибку
+          throw new Error('Модель не вернула изображение (возможно, отказалась редактировать)');
         }
 
         const tokensUsed = Math.ceil(prompt.length / 4) + 50;
