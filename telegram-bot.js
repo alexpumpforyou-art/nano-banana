@@ -113,6 +113,54 @@ async function sendAndRemember(chatId, text, options = {}) {
   return sentMsg;
 }
 
+// Функция умной отправки сообщений (разбивает длинные тексты)
+async function sendSmartMessage(chatId, text, options = {}) {
+  const MAX_LENGTH = 4000; // Оставляем запас до 4096
+
+  if (text.length <= MAX_LENGTH) {
+    return await sendAndRemember(chatId, text, options);
+  }
+
+  // Разбиваем на части
+  const parts = [];
+  let currentPart = '';
+
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    if ((currentPart + line).length + 1 > MAX_LENGTH) {
+      parts.push(currentPart);
+      currentPart = line;
+    } else {
+      currentPart += (currentPart ? '\n' : '') + line;
+    }
+  }
+
+  if (currentPart) {
+    parts.push(currentPart);
+  }
+
+  // Если какая-то часть все равно слишком длинная (одна строка > 4000 символов)
+  // Принудительно разбиваем её
+  const finalParts = [];
+  for (const part of parts) {
+    if (part.length > MAX_LENGTH) {
+      let remaining = part;
+      while (remaining.length > 0) {
+        finalParts.push(remaining.substring(0, MAX_LENGTH));
+        remaining = remaining.substring(MAX_LENGTH);
+      }
+    } else {
+      finalParts.push(part);
+    }
+  }
+
+  // Отправляем части последовательно
+  for (const part of finalParts) {
+    await sendAndRemember(chatId, part, options);
+  }
+}
+
 // ==================== КОМАНДЫ ====================
 
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
@@ -1718,10 +1766,11 @@ bot.on('message', async (msg) => {
 
       const newBalance = user.credits - creditsUsed;
 
-      // Отправляем ответ
-      await bot.sendMessage(
+      // Отправляем ответ (используем sendSmartMessage для длинных текстов)
+      const footer = `\n\n---\n💎 Использовано: ${creditsUsed} ${creditsUsed === 1 ? 'кредит' : 'кредита/кредитов'}\n💎 Осталось: ${newBalance}`;
+      await sendSmartMessage(
         chatId,
-        `${result.text}\n\n---\n💎 Использовано: ${creditsUsed} ${creditsUsed === 1 ? 'кредит' : 'кредита/кредитов'}\n💎 Осталось: ${newBalance}`
+        result.text + footer
       );
     }
 
