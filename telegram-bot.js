@@ -161,6 +161,52 @@ async function sendSmartMessage(chatId, text, options = {}) {
   }
 }
 
+// Класс для анимированных статусных сообщений
+class StatusMessage {
+  constructor(bot, chatId) {
+    this.bot = bot;
+    this.chatId = chatId;
+    this.messageId = null;
+    this.intervalId = null;
+    this.frames = ['.', '..', '...'];
+    this.frameIndex = 0;
+    this.baseText = '';
+  }
+
+  async start(text) {
+    this.baseText = text;
+    try {
+      const msg = await this.bot.sendMessage(this.chatId, `${this.baseText} ${this.frames[0]}`);
+      this.messageId = msg.message_id;
+
+      this.intervalId = setInterval(() => {
+        this.frameIndex = (this.frameIndex + 1) % this.frames.length;
+        this.bot.editMessageText(`${this.baseText} ${this.frames[this.frameIndex]}`, {
+          chat_id: this.chatId,
+          message_id: this.messageId
+        }).catch(() => { }); // Игнорируем ошибки редактирования (например, если текст не изменился)
+      }, 1000);
+    } catch (e) {
+      console.error('Ошибка запуска статус-сообщения:', e);
+    }
+  }
+
+  async stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.messageId) {
+      try {
+        await this.bot.deleteMessage(this.chatId, this.messageId);
+      } catch (e) {
+        // Игнорируем ошибки удаления
+      }
+      this.messageId = null;
+    }
+  }
+}
+
 // ==================== КОМАНДЫ ====================
 
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
@@ -1591,8 +1637,8 @@ bot.on('message', async (msg) => {
 
       await bot.sendChatAction(chatId, 'upload_photo');
 
-      console.log(`✏️ Запрос на редактирование изображения: "${prompt}"`);
-      await bot.sendMessage(chatId, '✏️ Редактирую изображение, подождите...');
+      const statusMsg = new StatusMessage(bot, chatId);
+      await statusMsg.start('✏️ Вносим правки');
 
       // Скачиваем фото (берём самое большое)
       const photo = msg.photo[msg.photo.length - 1];
@@ -1626,6 +1672,8 @@ bot.on('message', async (msg) => {
 
       const newBalance = user.credits - creditsUsed;
 
+      await statusMsg.stop();
+
       // Отправляем отредактированное изображение
       try {
         await bot.sendPhoto(chatId, result.imageBuffer, {
@@ -1643,6 +1691,7 @@ bot.on('message', async (msg) => {
 
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
+      if (typeof statusMsg !== 'undefined') await statusMsg.stop();
       await bot.sendMessage(chatId, '❌ Произошла ошибка при редактировании изображения.');
       return;
     }
@@ -1687,48 +1736,59 @@ bot.on('message', async (msg) => {
       const imagePrompt = ImageService.extractImagePrompt(prompt);
       console.log(`🎨 Запрос на генерацию изображения: "${imagePrompt}"`);
 
-      const creditsUsed = PRICES.IMAGE_GEN;
+      const statusMsg = new StatusMessage(bot, chatId);
+      await statusMsg.start('🎨 Рисую');
 
-      // Проверяем баланс
-      if (user.credits < creditsUsed) {
-        return await bot.sendMessage(
-          chatId,
-          `❌ Недостаточно кредитов.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
-        );
-      }
-
-      const result = await imageService.generateImage(imagePrompt);
-
-      // Списываем кредиты
-      userQueries.updateCredits.run(-creditsUsed, user.id);
-      userQueries.incrementGenerations.run(creditsUsed, user.id);
-
-      // Сохраняем генерацию с изображением в base64
-      const imageBase64 = result.imageBuffer.toString('base64');
-      generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
-
-      // Сохраняем транзакцию
-      transactionQueries.create.run(
-        user.id,
-        'generation',
-        -creditsUsed,
-        0,
-        'Генерация изображения'
-      );
-
-      const newBalance = user.credits - creditsUsed;
-
-      // Отправляем изображение
       try {
-        await bot.sendPhoto(chatId, result.imageBuffer, {
-          caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
-        });
-      } catch (photoError) {
-        console.error('Ошибка отправки фото:', photoError);
-        await bot.sendMessage(
-          chatId,
-          `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+        const creditsUsed = PRICES.IMAGE_GEN;
+
+        // Проверяем баланс
+        if (user.credits < creditsUsed) {
+          await statusMsg.stop();
+          return await bot.sendMessage(
+            chatId,
+            `❌ Недостаточно кредитов.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
+          );
+        }
+
+        const result = await imageService.generateImage(imagePrompt);
+
+        // Списываем кредиты
+        userQueries.updateCredits.run(-creditsUsed, user.id);
+        userQueries.incrementGenerations.run(creditsUsed, user.id);
+
+        // Сохраняем генерацию с изображением в base64
+        const imageBase64 = result.imageBuffer.toString('base64');
+        generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
+
+        // Сохраняем транзакцию
+        transactionQueries.create.run(
+          user.id,
+          'generation',
+          -creditsUsed,
+          0,
+          'Генерация изображения'
         );
+
+        const newBalance = user.credits - creditsUsed;
+
+        await statusMsg.stop();
+
+        // Отправляем изображение
+        try {
+          await bot.sendPhoto(chatId, result.imageBuffer, {
+            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+          });
+        } catch (photoError) {
+          console.error('Ошибка отправки фото:', photoError);
+          await bot.sendMessage(
+            chatId,
+            `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
+          );
+        }
+      } catch (e) {
+        await statusMsg.stop();
+        throw e;
       }
     } else {
       // Обычная генерация текста
