@@ -29,63 +29,52 @@ bot.deleteWebHook().then(() => {
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
-// Новая система кредитов (деноминация: 50 токенов = 1 кредит)
-const FREE_CREDITS = parseInt(process.env.FREE_CREDITS) || 10; // было 100-200 токенов = 2-4 кредита
-const CREDITS_PER_STAR = parseInt(process.env.CREDITS_PER_STAR) || 40; // было 2000 токенов = 40 кредитов
+// Новая система кредитов (деноминация: 1 кредит = 1 текст, 2 кредита = 1 картинка)
+const FREE_CREDITS = parseInt(process.env.FREE_CREDITS) || 5;
+const CREDITS_PER_STAR = parseInt(process.env.CREDITS_PER_STAR) || 2; // 1 Star ~ 1.6 credits (based on 50 stars = 80 credits)
 const REFERRAL_BONUS = parseInt(process.env.REFERRAL_BONUS) || 5; // бонус за реферала
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 
 // Цены на операции (в кредитах)
-// 1 Star ≈ $0.02, 1 Star = 40 credits => 1 credit ≈ $0.0005
-// Cost basis:
-// - Text (Flash): ~$0.0001/req -> 2x = $0.0002 -> < 1 credit. Set to 1.
-// - Image (Imagen 3): ~$0.04/img -> 2x = $0.08 -> 160 credits.
 const PRICES = {
-  TEXT_SHORT: 1,      // короткий текст (до 500 символов)
-  TEXT_LONG: 2,       // длинный текст (500+ символов)
-  IMAGE_GEN: 160,     // генерация изображения (4 Stars)
-  IMAGE_EDIT: 180     // редактирование изображения (4.5 Stars)
+  TEXT_SHORT: 1,      // текст
+  TEXT_LONG: 1,       // длинный текст
+  IMAGE_GEN: 2,       // генерация изображения
+  IMAGE_EDIT: 2       // редактирование изображения
 };
 
 const YOOKASSA_PROVIDER_TOKEN = process.env.YOOKASSA_PROVIDER_TOKEN;
 
-// Генерируем пакеты кредитов динамически на основе CREDITS_PER_STAR
+// Генерируем пакеты кредитов
 const CREDIT_PACKAGES = [
-  {
-    stars: 1,
-    price_rub: 2, // Примерная цена в рублях
-    credits: CREDITS_PER_STAR * 1,
-    label: `${CREDITS_PER_STAR} кредитов`,
-    description: 'Базовый'
-  },
-  {
-    stars: 5,
-    price_rub: 10,
-    credits: Math.floor(CREDITS_PER_STAR * 5 * 1.1),
-    label: `${Math.floor(CREDITS_PER_STAR * 5 * 1.1)} кредитов`,
-    description: '+10% 💎'
-  },
-  {
-    stars: 10,
-    price_rub: 20,
-    credits: Math.floor(CREDITS_PER_STAR * 10 * 1.2),
-    label: `${Math.floor(CREDITS_PER_STAR * 10 * 1.2)} кредитов`,
-    description: '+20% 💎'
-  },
-  {
-    stars: 25,
-    price_rub: 50,
-    credits: Math.floor(CREDITS_PER_STAR * 25 * 1.3),
-    label: `${Math.floor(CREDITS_PER_STAR * 25 * 1.3)} кредитов`,
-    description: '+30% 💎'
-  },
   {
     stars: 50,
     price_rub: 100,
-    credits: Math.floor(CREDITS_PER_STAR * 50 * 1.5),
-    label: `${Math.floor(CREDITS_PER_STAR * 50 * 1.5)} кредитов`,
-    description: '+50% 🔥'
+    credits: 80,
+    label: `40 генераций`,
+    description: 'Базовый'
   },
+  {
+    stars: 250,
+    price_rub: 500,
+    credits: 500,
+    label: `250 генераций`,
+    description: 'Популярный'
+  },
+  {
+    stars: 500,
+    price_rub: 1000,
+    credits: 1000,
+    label: `500 генераций`,
+    description: 'Выгодный'
+  },
+  {
+    stars: 2500,
+    price_rub: 5000,
+    credits: 8000,
+    label: `4000 генераций`,
+    description: 'Максимальный 🔥'
+  }
 ];
 
 // Для удаления старых сообщений
@@ -478,9 +467,9 @@ bot.onText(/\/help/, async (msg) => {
 • _"Добавь шляпу"_
 
 💎 *Кредиты:*
-• Текст: ~1 кредит
-• Картинка: ${PRICES.IMAGE_GEN} кредитов
-• Редактирование: ${PRICES.IMAGE_EDIT} кредитов
+• Текст: 1 кредит
+• Картинка: 2 кредита
+• Редактирование: 2 кредита
 
 💰 Пополнить баланс: /buy
 ❓ Поддержка: /support
@@ -786,9 +775,9 @@ bot.onText(/\/terms/, async (msg) => {
 2.2. Покупка кредитов осуществляется через Telegram Stars (⭐).
 
 2.3. Цены:
-• Текст: ${PRICES.TEXT_SHORT}-${PRICES.TEXT_LONG} кредита
-• Изображение: ${PRICES.IMAGE_GEN} кредитов
-• Редактирование: ${PRICES.IMAGE_EDIT} кредитов
+• Текст: 1 кредит
+• Изображение: 2 кредита
+• Редактирование: 2 кредита
 
 2.4. После покупки возврат невозможен, кроме случаев технической ошибки.
 
@@ -1097,10 +1086,10 @@ bot.on('callback_query', async (query) => {
       const priceInfo = `💰 *Магазин кредитов*\n\n` +
         `💎 Ваш баланс: ${user.credits} кредитов\n\n` +
         `📊 Стоимость операций:\n` +
-        `• Текст (короткий): ${PRICES.TEXT_SHORT} кредит\n` +
-        `• Генерация изображения: ${PRICES.IMAGE_GEN} кредитов\n` +
-        `• Редактирование изображения: ${PRICES.IMAGE_EDIT} кредитов\n\n` +
-        `🎁 Больше покупаете = больше бонусов!`;
+        `• Текст: 1 кредит\n` +
+        `• Генерация изображения: 2 кредита\n` +
+        `• Редактирование изображения: 2 кредита\n\n` +
+        `🎁 Больше покупаете = дешевле генерация!`;
 
       await bot.answerCallbackQuery(query.id);
       const sentMsg = await bot.sendMessage(chatId, priceInfo, { reply_markup: keyboard, parse_mode: 'Markdown' });
@@ -1208,7 +1197,7 @@ _Пример: "Нарисуй синего дракона"_
 _Пример: "Убеди фон"_
 
 💎 *Баланс:*
-• 1 Star = ${CREDITS_PER_STAR} кредитов
+• 1 картинка = 2 кредита
 • Новичкам: ${FREE_CREDITS} кредитов бесплатно!
 
 💰 Купить кредиты: кнопка "💰 Купить кредиты"
@@ -1402,7 +1391,7 @@ _Пример: "Убеди фон"_
     const keyboard = {
       inline_keyboard: [
         ...CREDIT_PACKAGES.map(pkg => [{
-          text: `⭐ ${pkg.stars} Stars → ${pkg.credits} ${pkg.description}`,
+          text: `⭐ ${pkg.stars} Stars → ${pkg.label}`,
           callback_data: `buy_stars_${pkg.stars}`
         }]),
         [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
@@ -1418,7 +1407,7 @@ _Пример: "Убеди фон"_
     const keyboard = {
       inline_keyboard: [
         ...CREDIT_PACKAGES.map(pkg => [{
-          text: `₽ ${pkg.price_rub} → ${pkg.credits} ${pkg.description}`,
+          text: `₽ ${pkg.price_rub} → ${pkg.label}`,
           callback_data: `buy_rub_${pkg.stars}` // используем stars как ID пакета для простоты
         }]),
         [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
