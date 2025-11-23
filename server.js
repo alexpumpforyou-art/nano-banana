@@ -190,10 +190,16 @@ app.post('/yookassa/webhook', async (req, res) => {
       console.log(`💰 ЮKassa: Успешный платеж ${paymentId} на сумму ${amount} RUB от пользователя ${userId}`);
 
       if (userId) {
-        // Начисляем кредиты
-        // Примерный курс: 1 RUB = 2 кредита
-        const creditsPerRub = 2;
-        const creditsToAdd = Math.floor(amount * creditsPerRub);
+        // Получаем количество кредитов из метаданных или считаем по базовому тарифу
+        let creditsToAdd = 0;
+
+        if (metadata.credits) {
+          creditsToAdd = parseInt(metadata.credits);
+        } else {
+          // Fallback: считаем по самому дорогому тарифу (100р = 35 кр)
+          // 1 RUB = 0.35 credits
+          creditsToAdd = Math.floor(amount * 0.35);
+        }
 
         // Получаем пользователя для проверки существования
         const user = userQueries.getAdminUserById.get(userId);

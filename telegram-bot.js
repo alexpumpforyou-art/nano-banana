@@ -1402,9 +1402,9 @@ _Пример: "Убеди фон"_
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '💎 200 кредитов - 100₽', callback_data: 'buy_rub_100' }],
-        [{ text: '💎 700 кредитов - 300₽ (+15%)', callback_data: 'buy_rub_300' }],
-        [{ text: '💎 1200 кредитов - 500₽ (+20%)', callback_data: 'buy_rub_500' }],
+        [{ text: '💎 35 кредитов - 100₽', callback_data: 'buy_rub_100' }],
+        [{ text: '💎 150 кредитов - 300₽ (Выгодно)', callback_data: 'buy_rub_300' }],
+        [{ text: '💎 400 кредитов - 500₽ (🔥 2.5₽/фото)', callback_data: 'buy_rub_500' }],
         [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
       ]
     };
@@ -1423,10 +1423,10 @@ _Пример: "Убеди фон"_
 
     // Определяем количество кредитов
     switch (amount) {
-      case 100: credits = 200; break;
-      case 300: credits = 700; break;
-      case 500: credits = 1200; break;
-      default: credits = amount * 2; // Fallback
+      case 100: credits = 35; break;
+      case 300: credits = 150; break;
+      case 500: credits = 400; break;
+      default: credits = Math.floor(amount / 2.85); // Fallback ~35 credits per 100 rub
     }
 
     // Получаем пользователя
@@ -1707,7 +1707,7 @@ bot.on('message', async (msg) => {
         amount,
         `Покупка ${credits} кредитов (Nano Banana)`,
         `https://t.me/${(await bot.getMe()).username}`, // Возврат в бота
-        { userId: state.data.userId, email: email }
+        { userId: state.data.userId, email: email, credits: credits }
       );
 
       if (payment.confirmation && payment.confirmation.confirmation_url) {
