@@ -7,11 +7,13 @@ const { v4: uuidv4 } = require('uuid');
 
 const { db, userQueries, transactionQueries, generationQueries, contentQueries } = require('./database');
 const GeminiService = require('./gemini-service');
+const YookassaService = require('./yookassa-service');
 
 // Инициализация
 const app = express();
 const PORT = process.env.PORT || 3000;
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
+const yookassa = new YookassaService(process.env.YOOKASSA_SHOP_ID, process.env.YOOKASSA_SECRET_KEY);
 
 // Простая система сессий для админ-панели
 const adminSessions = new Map(); // sessionId -> { timestamp, ip }
@@ -30,7 +32,7 @@ app.use(express.static('public'));
 app.post('/api/auth', (req, res) => {
   try {
     let { webId } = req.body;
-    
+
     if (!webId) {
       webId = uuidv4();
     }
@@ -56,7 +58,7 @@ app.post('/api/auth', (req, res) => {
 app.get('/api/balance/:webId', (req, res) => {
   try {
     const user = userQueries.getByWebId.get(req.params.webId);
-    
+
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
@@ -87,8 +89,8 @@ app.post('/api/generate', async (req, res) => {
 
     // Проверяем баланс
     if (user.tokens <= 0) {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: 'Недостаточно токенов. Купите токены для продолжения.',
         needTokens: true
       });
@@ -99,8 +101,8 @@ app.post('/api/generate', async (req, res) => {
 
     // Проверяем, хватит ли токенов
     if (user.tokens < result.tokensUsed) {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: `Недостаточно токенов. Требуется: ${result.tokensUsed}, доступно: ${user.tokens}`,
         needTokens: true
       });
@@ -174,6 +176,61 @@ app.get('/api/transactions/:webId', (req, res) => {
   }
 });
 
+// Webhook для ЮKassa
+app.post('/yookassa/webhook', async (req, res) => {
+  try {
+    const { event, object } = req.body;
+
+    if (event === 'payment.succeeded') {
+      const paymentId = object.id;
+      const metadata = object.metadata || {};
+      const userId = metadata.userId;
+      const amount = parseFloat(object.amount.value);
+
+      console.log(`💰 ЮKassa: Успешный платеж ${paymentId} на сумму ${amount} RUB от пользователя ${userId}`);
+
+      if (userId) {
+        // Начисляем кредиты
+        // Примерный курс: 1 RUB = 2 кредита
+        const creditsPerRub = 2;
+        const creditsToAdd = Math.floor(amount * creditsPerRub);
+
+        // Получаем пользователя для проверки существования
+        const user = userQueries.getAdminUserById.get(userId);
+
+        if (user) {
+          userQueries.updateCredits.run(creditsToAdd, userId);
+
+          transactionQueries.create.run(
+            userId,
+            'purchase_yookassa',
+            creditsToAdd,
+            amount,
+            `Покупка через ЮKassa (${amount} RUB)`
+          );
+
+          // Уведомляем пользователя через бота
+          if (telegramBot && user.telegram_id) {
+            try {
+              await telegramBot.sendMessage(
+                user.telegram_id,
+                `✅ Оплата прошла успешно!\n\n💰 Сумма: ${amount} RUB\n💎 Начислено: ${creditsToAdd} кредитов\n\nСпасибо за покупку!`
+              );
+            } catch (e) {
+              console.error('Ошибка отправки уведомления об оплате:', e.message);
+            }
+          }
+        }
+      }
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Ошибка вебхука ЮKassa:', error);
+    res.status(500).send('Error');
+  }
+});
+
 // ==================== TELEGRAM BOT ====================
 // Запускаем бота только если есть токен
 let telegramBot = null;
@@ -199,22 +256,22 @@ app.get('/health', (req, res) => {
 // Middleware для проверки админ-сессии
 function requireAdmin(req, res, next) {
   const sessionId = req.headers['x-admin-session'] || req.query.session;
-  
+
   if (!sessionId) {
     return res.status(401).json({ success: false, error: 'Требуется авторизация' });
   }
-  
+
   const session = adminSessions.get(sessionId);
   if (!session) {
     return res.status(401).json({ success: false, error: 'Сессия истекла' });
   }
-  
+
   // Проверяем таймаут
   if (Date.now() - session.timestamp > SESSION_TIMEOUT) {
     adminSessions.delete(sessionId);
     return res.status(401).json({ success: false, error: 'Сессия истекла' });
   }
-  
+
   // Обновляем время последней активности
   session.timestamp = Date.now();
   next();
@@ -234,18 +291,18 @@ setInterval(() => {
 app.post('/api/admin/login', (req, res) => {
   try {
     const { password } = req.body;
-    
+
     if (password !== ADMIN_PASSWORD) {
       return res.status(401).json({ success: false, error: 'Неверный пароль' });
     }
-    
+
     // Создаем сессию
     const sessionId = uuidv4();
     adminSessions.set(sessionId, {
       timestamp: Date.now(),
       ip: req.ip || req.connection.remoteAddress
     });
-    
+
     res.json({
       success: true,
       sessionId
@@ -262,7 +319,7 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
     const stats = userQueries.getTotalStats.get();
     const transactionStats = transactionQueries.getTotalStats.get();
     const generationStats = generationQueries.countByType.all();
-    
+
     res.json({
       success: true,
       stats: {
@@ -281,7 +338,7 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   try {
     const users = userQueries.getAllUsers.all();
-    
+
     // Добавляем информацию о рефералах для каждого пользователя
     const usersWithRefs = users.map(user => {
       const refCount = userQueries.countReferrals.get(user.id)?.count || 0;
@@ -290,7 +347,7 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
         referrals_count: refCount
       };
     });
-    
+
     res.json({
       success: true,
       users: usersWithRefs
@@ -305,21 +362,21 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    
+
     const user = userQueries.getAdminUserById.get(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
-    
+
     // Получаем генерации
     const generations = generationQueries.getAllByUserId.all(userId);
-    
+
     // Получаем транзакции
     const transactions = transactionQueries.getAllByUserId.all(userId);
-    
+
     // Получаем рефералов
     const referrals = userQueries.getReferrals.all(userId);
-    
+
     res.json({
       success: true,
       user: {
@@ -339,7 +396,7 @@ app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
 app.get('/api/admin/requests', requireAdmin, (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
-    
+
     const requests = db.prepare(`
       SELECT 
         g.id,
@@ -358,7 +415,7 @@ app.get('/api/admin/requests', requireAdmin, (req, res) => {
       ORDER BY g.created_at DESC
       LIMIT ?
     `).all(limit);
-    
+
     res.json({
       success: true,
       requests
@@ -373,25 +430,25 @@ app.get('/api/admin/requests', requireAdmin, (req, res) => {
 app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
   try {
     const { userId, credits, description } = req.body;
-    
+
     if (!userId || credits === undefined || credits === null) {
       return res.status(400).json({ success: false, error: 'Требуется userId и credits' });
     }
-    
+
     const creditsAmount = parseInt(credits);
     if (isNaN(creditsAmount) || creditsAmount === 0) {
       return res.status(400).json({ success: false, error: 'Кредиты должны быть числом, не равным нулю' });
     }
-    
+
     // Получаем пользователя
     const user = userQueries.getAdminUserById.get(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
-    
+
     // Начисляем кредиты
     userQueries.updateCredits.run(creditsAmount, userId);
-    
+
     // Сохраняем транзакцию
     const txDescription = description || `Админ начислил ${creditsAmount > 0 ? '+' : ''}${creditsAmount} кредитов`;
     transactionQueries.create.run(
@@ -401,12 +458,12 @@ app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
       0,
       txDescription
     );
-    
+
     // Получаем обновленного пользователя
     const updatedUser = userQueries.getAdminUserById.get(userId);
-    
+
     console.log(`💰 Админ начислил ${creditsAmount} кредитов пользователю ${user.username || user.telegram_id || user.id}`);
-    
+
     res.json({
       success: true,
       message: `Начислено ${creditsAmount > 0 ? '+' : ''}${creditsAmount} кредитов`,
@@ -425,45 +482,45 @@ app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
 app.post('/api/admin/send-message', requireAdmin, async (req, res) => {
   try {
     const { userId, message } = req.body;
-    
+
     if (!userId || !message || !message.trim()) {
       return res.status(400).json({ success: false, error: 'Требуется userId и message' });
     }
-    
+
     // Получаем пользователя
     const user = userQueries.getAdminUserById.get(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
-    
+
     // Проверяем, что у пользователя есть Telegram ID
     if (!user.telegram_id) {
       return res.status(400).json({ success: false, error: 'У пользователя нет Telegram ID (это Web пользователь)' });
     }
-    
+
     // Проверяем, что бот доступен
     if (!telegramBot) {
       return res.status(503).json({ success: false, error: 'Telegram бот не инициализирован' });
     }
-    
+
     // Отправляем сообщение
     const chatId = parseInt(user.telegram_id);
     await telegramBot.sendMessage(chatId, message);
-    
+
     console.log(`📤 Админ отправил сообщение пользователю ${user.username || user.telegram_id}: ${message.substring(0, 50)}...`);
-    
+
     res.json({
       success: true,
       message: 'Сообщение отправлено успешно'
     });
   } catch (error) {
     console.error('Ошибка отправки сообщения:', error);
-    
+
     // Обрабатываем специфичные ошибки Telegram
     if (error.response && error.response.statusCode === 403) {
       return res.status(403).json({ success: false, error: 'Пользователь заблокировал бота или не может получать сообщения' });
     }
-    
+
     res.status(500).json({ success: false, error: error.message || 'Ошибка отправки сообщения' });
   }
 });
@@ -472,20 +529,20 @@ app.post('/api/admin/send-message', requireAdmin, async (req, res) => {
 app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
   try {
     const { message, filters } = req.body;
-    
+
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, error: 'Требуется message' });
     }
-    
+
     // Проверяем, что бот доступен
     if (!telegramBot) {
       return res.status(503).json({ success: false, error: 'Telegram бот не инициализирован' });
     }
-    
+
     // Формируем SQL запрос с фильтрами
     let query = 'SELECT id, telegram_id, username, is_blocked FROM users WHERE telegram_id IS NOT NULL';
     const params = [];
-    
+
     // Применяем фильтры
     if (filters) {
       if (filters.onlyActive === true) {
@@ -503,14 +560,14 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
         params.push(parseInt(filters.maxCredits));
       }
     }
-    
+
     // Получаем список пользователей
     const users = db.prepare(query).all(...params);
-    
+
     if (users.length === 0) {
       return res.status(400).json({ success: false, error: 'Нет пользователей, соответствующих фильтрам' });
     }
-    
+
     // Отправляем сообщения асинхронно с задержкой между запросами (чтобы не превысить лимиты Telegram)
     const results = {
       total: users.length,
@@ -518,16 +575,16 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
       failed: 0,
       errors: []
     };
-    
+
     // Отправляем сообщения с задержкой 50ms между запросами (20 сообщений в секунду)
     for (let i = 0; i < users.length; i++) {
       const user = users[i];
-      
+
       try {
         const chatId = parseInt(user.telegram_id);
         await telegramBot.sendMessage(chatId, message);
         results.sent++;
-        
+
         // Небольшая задержка между сообщениями
         if (i < users.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 50));
@@ -539,14 +596,14 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
           username: user.username || user.telegram_id,
           error: error.message || 'Неизвестная ошибка'
         });
-        
+
         // Логируем ошибки, но продолжаем рассылку
         console.error(`❌ Ошибка отправки пользователю ${user.username || user.telegram_id}:`, error.message);
       }
     }
-    
+
     console.log(`📢 Массовая рассылка завершена: ${results.sent}/${results.total} отправлено`);
-    
+
     res.json({
       success: true,
       results
@@ -592,11 +649,11 @@ app.get('/api/admin/content/:type', requireAdmin, (req, res) => {
 app.post('/api/admin/content', requireAdmin, (req, res) => {
   try {
     const { id, type, title, text, image_data, order_index, is_active } = req.body;
-    
+
     if (!type) {
       return res.status(400).json({ success: false, error: 'Требуется type' });
     }
-    
+
     if (id) {
       // Обновление существующего контента
       contentQueries.update.run(
@@ -607,7 +664,7 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
         is_active !== undefined ? (is_active ? 1 : 0) : 1,
         id
       );
-      
+
       const updated = contentQueries.getById.get(id);
       res.json({
         success: true,
@@ -624,7 +681,7 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
         order_index || 0,
         is_active !== undefined ? (is_active ? 1 : 0) : 1
       );
-      
+
       const created = contentQueries.getById.get(result.lastInsertRowid);
       res.json({
         success: true,
@@ -663,9 +720,9 @@ app.get('/api/debug/models', async (req, res) => {
   try {
     const https = require('https');
     const apiKey = process.env.GEMINI_API_KEY;
-    
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    
+
     // Используем https.get вместо fetch
     const data = await new Promise((resolve, reject) => {
       https.get(url, (response) => {
@@ -680,20 +737,20 @@ app.get('/api/debug/models', async (req, res) => {
         });
       }).on('error', reject);
     });
-    
+
     if (data.error) {
-      return res.json({ 
+      return res.json({
         error: data.error.message,
         apiKeyPreview: apiKey ? apiKey.substring(0, 20) + '...' : 'NOT SET'
       });
     }
-    
+
     const workingModels = data.models
       ? data.models
-          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-          .map(m => m.name.replace('models/', ''))
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => m.name.replace('models/', ''))
       : [];
-    
+
     res.json({
       success: true,
       totalModels: data.models?.length || 0,
@@ -701,7 +758,7 @@ app.get('/api/debug/models', async (req, res) => {
       recommendation: workingModels[0] || 'none',
       apiKeyPreview: apiKey ? apiKey.substring(0, 20) + '...' : 'NOT SET'
     });
-    
+
   } catch (error) {
     res.json({ error: error.message });
   }

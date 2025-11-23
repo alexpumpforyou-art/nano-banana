@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { userQueries, transactionQueries, generationQueries, referralQueries, contentQueries, generateReferralCode } = require('./database');
 const GeminiService = require('./gemini-service');
+const YookassaService = require('./yookassa-service');
 const ImageService = require('./image-service');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -27,6 +28,7 @@ bot.deleteWebHook().then(() => {
   console.log('🚀 BOT VERSION: 1.2 (Debug Duplication)');
 });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
+const yookassa = new YookassaService(process.env.YOOKASSA_SHOP_ID, process.env.YOOKASSA_SECRET_KEY);
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
 // Новая система кредитов (деноминация: 1 кредит = 1 текст, 2 кредита = 1 картинка)
@@ -79,6 +81,7 @@ const CREDIT_PACKAGES = [
 
 // Для удаления старых сообщений
 const userLastMessages = new Map(); // chatId -> [messageIds]
+const userStates = new Map(); // chatId -> { state: string, data: any }
 
 // Функция удаления старых сообщений
 async function deleteOldMessages(chatId) {
@@ -1386,6 +1389,66 @@ _Пример: "Убеди фон"_
       console.error('Ошибка проверки баланса:', error);
       await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
     }
+  } else if (data === 'buy_method_rub') {
+    // Предлагаем пакеты в рублях
+    // 1 Star = 2000 токенов (примерно 2 кредита, если 1 кредит = 1000 токенов? Нет, надо проверить логику)
+    // В PAYMENTS_SETUP.md: 1 Star = 2000 токенов.
+    // В коде: CREDITS_PER_STAR = 2. Значит 1 кредит = 1000 токенов.
+    // Курс Stars к рублю примерно 1 Star ~ 2 RUB (очень грубо, зависит от платформы).
+    // Сделаем пакеты:
+    // 100 RUB -> 200 кредитов
+    // 300 RUB -> 700 кредитов (+бонус)
+    // 500 RUB -> 1200 кредитов (+бонус)
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '💎 200 кредитов - 100₽', callback_data: 'buy_rub_100' }],
+        [{ text: '💎 700 кредитов - 300₽ (+15%)', callback_data: 'buy_rub_300' }],
+        [{ text: '💎 1200 кредитов - 500₽ (+20%)', callback_data: 'buy_rub_500' }],
+        [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
+      ]
+    };
+
+    await bot.editMessageText('🇷🇺 *Оплата картой РФ (ЮKassa)*\n\nВыберите пакет кредитов:', {
+      chat_id: chatId,
+      message_id: msg.message.message_id,
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    return;
+  } else if (data.startsWith('buy_rub_')) {
+    const amount = parseInt(data.split('_')[2]);
+    let credits = 0;
+
+    // Определяем количество кредитов
+    switch (amount) {
+      case 100: credits = 200; break;
+      case 300: credits = 700; break;
+      case 500: credits = 1200; break;
+      default: credits = amount * 2; // Fallback
+    }
+
+    // Получаем пользователя
+    const user = userQueries.getByTelegramId.get(chatId.toString());
+
+    // Сохраняем состояние
+    userStates.set(chatId, {
+      state: 'WAITING_EMAIL',
+      data: {
+        amount: amount,
+        credits: credits,
+        userId: user.id
+      }
+    });
+
+    await bot.sendMessage(chatId, `📧 Для отправки чека (по закону РФ), пожалуйста, введите ваш **Email**:`, { parse_mode: 'Markdown' });
+
+    // Удаляем сообщение с кнопками, чтобы не нажали дважды
+    try {
+      await bot.deleteMessage(chatId, msg.message.message_id);
+    } catch (e) { }
+
+    return;
   } else if (data === 'buy_method_stars') {
     // Показываем пакеты за Stars
     const keyboard = {
@@ -1619,10 +1682,65 @@ bot.on('message', async (msg) => {
   // Игнорируем команды
   if (msg.text && msg.text.startsWith('/')) return;
 
+  const chatId = msg.chat.id;
+  const state = userStates.get(chatId);
+
+  // Обработка ввода email для оплаты
+  if (state && state.state === 'WAITING_EMAIL' && msg.text) {
+    const email = msg.text.trim();
+    // Простая валидация email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      return await bot.sendMessage(chatId, '❌ Некорректный email. Попробуйте еще раз.');
+    }
+
+    const amount = state.data.amount;
+    const credits = state.data.credits;
+
+    try {
+      await bot.sendMessage(chatId, '⏳ Создаю платеж...');
+
+      const payment = await yookassa.createPayment(
+        amount,
+        `Покупка ${credits} кредитов (Nano Banana)`,
+        `https://t.me/${(await bot.getMe()).username}`, // Возврат в бота
+        { userId: state.data.userId, email: email }
+      );
+
+      if (payment.confirmation && payment.confirmation.confirmation_url) {
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '💳 Оплатить', url: payment.confirmation.confirmation_url }],
+            [{ text: '◀️ Отмена', callback_data: 'menu_buy' }]
+          ]
+        };
+
+        await bot.sendMessage(
+          chatId,
+          `✅ Платеж создан!\n\n💰 Сумма: ${amount} RUB\n💎 Кредитов: ${credits}\n📧 Чек придет на: ${email}\n\nНажмите кнопку ниже для оплаты:`,
+          { reply_markup: keyboard }
+        );
+      } else {
+        await bot.sendMessage(chatId, '❌ Ошибка создания платежа (нет ссылки).');
+      }
+
+      // Сбрасываем состояние
+      userStates.delete(chatId);
+      return;
+
+    } catch (error) {
+      console.error('Ошибка создания платежа:', error);
+      await bot.sendMessage(chatId, '❌ Ошибка при создании платежа. Попробуйте позже.');
+      userStates.delete(chatId);
+      return;
+    }
+  }
+
   // Игнорируем системные сообщения
   if (msg.successful_payment) return;
 
-  const chatId = msg.chat.id;
+
   const prompt = msg.text || msg.caption || '';
 
   // Проверяем есть ли фото в сообщении
