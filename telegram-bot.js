@@ -1757,13 +1757,13 @@ bot.on('message', async (msg) => {
       }
 
       // Сбрасываем состояние
-      await sessionService.deleteState(chatId);
+      await sessionService.clearState(chatId);
       return;
 
     } catch (error) {
       console.error('Ошибка создания платежа:', error);
       await bot.sendMessage(chatId, '❌ Ошибка при создании платежа. Попробуйте позже.');
-      await sessionService.deleteState(chatId);
+      await sessionService.clearState(chatId);
       return;
     }
   }
