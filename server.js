@@ -339,11 +339,11 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 // Получить общую статистику
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
-    const stats = userQueries.getTotalStats.get();
-    const transactionStats = transactionQueries.getTotalStats.get();
-    const generationStats = generationQueries.countByType.all();
+    const stats = await userQueries.getTotalStats();
+    const transactionStats = await transactionQueries.getTotalStats();
+    const generationStats = await generationQueries.countByType();
 
     res.json({
       success: true,
@@ -360,18 +360,19 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
 });
 
 // Получить всех пользователей
-app.get('/api/admin/users', requireAdmin, (req, res) => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    const users = userQueries.getAllUsers.all();
+    const users = await userQueries.getAllUsers();
 
     // Добавляем информацию о рефералах для каждого пользователя
-    const usersWithRefs = users.map(user => {
-      const refCount = userQueries.countReferrals.get(user.id)?.count || 0;
+    // Оптимизация: лучше делать это одним запросом, но пока оставим так, но с await
+    const usersWithRefs = await Promise.all(users.map(async user => {
+      const refCount = await userQueries.countReferrals(user.id);
       return {
         ...user,
-        referrals_count: refCount
+        referrals_count: refCount.count || 0
       };
-    });
+    }));
 
     res.json({
       success: true,
@@ -384,23 +385,23 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 });
 
 // Получить детальную информацию о пользователе
-app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
+app.get('/api/admin/user/:id', requireAdmin, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    const user = userQueries.getAdminUserById.get(userId);
+    const user = await userQueries.getAdminUserById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
 
     // Получаем генерации
-    const generations = generationQueries.getAllByUserId.all(userId);
+    const generations = await generationQueries.getAllByUserId(userId);
 
     // Получаем транзакции
-    const transactions = transactionQueries.getAllByUserId.all(userId);
+    const transactions = await transactionQueries.getAllByUserId(userId);
 
     // Получаем рефералов
-    const referrals = userQueries.getReferrals.all(userId);
+    const referrals = await userQueries.getReferrals(userId);
 
     res.json({
       success: true,
@@ -418,28 +419,11 @@ app.get('/api/admin/user/:id', requireAdmin, (req, res) => {
 });
 
 // Получить все запросы пользователей (для админ-панели)
-app.get('/api/admin/requests', requireAdmin, (req, res) => {
+app.get('/api/admin/requests', requireAdmin, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
 
-    const requests = db.prepare(`
-      SELECT 
-        g.id,
-        g.prompt,
-        g.response,
-        g.credits_used,
-        g.type,
-        g.image_data,
-        g.created_at,
-        u.id as user_id,
-        u.username,
-        u.telegram_id,
-        u.web_id
-      FROM generations g
-      JOIN users u ON g.user_id = u.id
-      ORDER BY g.created_at DESC
-      LIMIT ?
-    `).all(limit);
+    const requests = await userQueries.getRequests(limit);
 
     res.json({
       success: true,
@@ -452,7 +436,7 @@ app.get('/api/admin/requests', requireAdmin, (req, res) => {
 });
 
 // Начислить кредиты пользователю
-app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
+app.post('/api/admin/add-credits', requireAdmin, async (req, res) => {
   try {
     const { userId, credits, description } = req.body;
 
@@ -466,17 +450,17 @@ app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
     }
 
     // Получаем пользователя
-    const user = userQueries.getAdminUserById.get(userId);
+    const user = await userQueries.getAdminUserById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
 
     // Начисляем кредиты
-    userQueries.updateCredits.run(creditsAmount, userId);
+    await userQueries.updateCredits(creditsAmount, userId);
 
     // Сохраняем транзакцию
     const txDescription = description || `Админ начислил ${creditsAmount > 0 ? '+' : ''}${creditsAmount} кредитов`;
-    transactionQueries.create.run(
+    await transactionQueries.create(
       userId,
       'admin_add',
       creditsAmount,
@@ -485,7 +469,7 @@ app.post('/api/admin/add-credits', requireAdmin, (req, res) => {
     );
 
     // Получаем обновленного пользователя
-    const updatedUser = userQueries.getAdminUserById.get(userId);
+    const updatedUser = await userQueries.getAdminUserById(userId);
 
     console.log(`💰 Админ начислил ${creditsAmount} кредитов пользователю ${user.username || user.telegram_id || user.id}`);
 
@@ -513,7 +497,7 @@ app.post('/api/admin/send-message', requireAdmin, async (req, res) => {
     }
 
     // Получаем пользователя
-    const user = userQueries.getAdminUserById.get(userId);
+    const user = await userQueries.getAdminUserById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
@@ -564,30 +548,8 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
       return res.status(503).json({ success: false, error: 'Telegram бот не инициализирован' });
     }
 
-    // Формируем SQL запрос с фильтрами
-    let query = 'SELECT id, telegram_id, username, is_blocked FROM users WHERE telegram_id IS NOT NULL';
-    const params = [];
-
-    // Применяем фильтры
-    if (filters) {
-      if (filters.onlyActive === true) {
-        query += ' AND is_blocked = 0';
-      }
-      if (filters.onlyBlocked === true) {
-        query += ' AND is_blocked = 1';
-      }
-      if (filters.minCredits !== undefined && filters.minCredits !== null) {
-        query += ' AND credits >= ?';
-        params.push(parseInt(filters.minCredits));
-      }
-      if (filters.maxCredits !== undefined && filters.maxCredits !== null) {
-        query += ' AND credits <= ?';
-        params.push(parseInt(filters.maxCredits));
-      }
-    }
-
     // Получаем список пользователей
-    const users = db.prepare(query).all(...params);
+    const users = await userQueries.getUsersForBroadcast(filters);
 
     if (users.length === 0) {
       return res.status(400).json({ success: false, error: 'Нет пользователей, соответствующих фильтрам' });

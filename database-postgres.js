@@ -115,6 +115,47 @@ const userQueries = {
             )
             .first();
         return result;
+    },
+
+    async getRequests(limit) {
+        return knex('generations as g')
+            .join('users as u', 'g.user_id', 'u.id')
+            .select(
+                'g.id',
+                'g.prompt',
+                'g.result as response',
+                'g.cost as credits_used',
+                'g.type',
+                'g.image_data',
+                'g.created_at',
+                'u.id as user_id',
+                'u.username',
+                'u.telegram_id',
+                'u.web_id'
+            )
+            .orderBy('g.created_at', 'desc')
+            .limit(limit);
+    },
+
+    async getUsersForBroadcast(filters) {
+        let query = knex('users').select('id', 'telegram_id', 'username', 'is_blocked').whereNotNull('telegram_id');
+
+        if (filters) {
+            if (filters.onlyActive === true) {
+                query = query.where('is_blocked', false);
+            }
+            if (filters.onlyBlocked === true) {
+                query = query.where('is_blocked', true);
+            }
+            if (filters.minCredits !== undefined && filters.minCredits !== null) {
+                query = query.where('credits', '>=', parseInt(filters.minCredits));
+            }
+            if (filters.maxCredits !== undefined && filters.maxCredits !== null) {
+                query = query.where('credits', '<=', parseInt(filters.maxCredits));
+            }
+        }
+
+        return query;
     }
 };
 
