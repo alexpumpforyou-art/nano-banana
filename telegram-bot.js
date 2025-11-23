@@ -1411,7 +1411,8 @@ _Пример: "Убеди фон"_
 
     await bot.editMessageText('🇷🇺 *Оплата картой РФ (ЮKassa)*\n\nВыберите пакет кредитов:', {
       chat_id: chatId,
-      message_id: msg.message.message_id,
+      message_id: query.message.message_id,
+
       parse_mode: 'Markdown',
       reply_markup: keyboard
     });
@@ -1445,7 +1446,8 @@ _Пример: "Убеди фон"_
 
     // Удаляем сообщение с кнопками, чтобы не нажали дважды
     try {
-      await bot.deleteMessage(chatId, msg.message.message_id);
+      await bot.deleteMessage(chatId, query.message.message_id);
+
     } catch (e) { }
 
     return;
