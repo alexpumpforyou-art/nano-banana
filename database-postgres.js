@@ -97,11 +97,16 @@ const userQueries = {
     },
 
     async getAllUsers() {
-        return knex('users').orderBy('created_at', 'desc');
+        return knex('users')
+            .select('*', knex.raw('generations_count as total_generations'))
+            .orderBy('created_at', 'desc');
     },
 
     async getAdminUserById(id) {
-        return knex('users').where('id', id).first();
+        return knex('users')
+            .select('*', knex.raw('generations_count as total_generations'))
+            .where('id', id)
+            .first();
     },
 
     async getTotalStats() {
