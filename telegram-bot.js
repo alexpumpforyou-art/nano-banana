@@ -1695,6 +1695,24 @@ bot.on('message', async (msg) => {
   if (msg.text && msg.text.startsWith('/')) return;
 
   const chatId = msg.chat.id;
+  // Команда статуса (только для админа)
+  if (msg.text === '/status' && (!ADMIN_TELEGRAM_ID || chatId.toString() === ADMIN_TELEGRAM_ID.toString())) {
+    try {
+      const dbStatus = await userQueries.testConnection ? await userQueries.testConnection() : 'OK (Assumed)';
+      const redisStatus = await sessionService.ping();
+
+      let statusMsg = `📊 *System Status*\n\n`;
+      statusMsg += `🐘 Database: ${dbStatus ? '✅ Online' : '❌ Offline'}\n`;
+      statusMsg += `🔴 Redis: ${redisStatus ? '✅ Online' : '❌ Offline'}\n`;
+      statusMsg += `🤖 Bot Version: 1.3 (Redis Enabled)\n`;
+      statusMsg += `⏱ Uptime: ${Math.floor(process.uptime())}s`;
+
+      return await bot.sendMessage(chatId, statusMsg, { parse_mode: 'Markdown' });
+    } catch (e) {
+      return await bot.sendMessage(chatId, `❌ Error checking status: ${e.message}`);
+    }
+  }
+
   const userState = await sessionService.getState(chatId);
 
   // Обработка ввода email для оплаты

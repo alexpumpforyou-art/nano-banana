@@ -79,13 +79,12 @@ const sessionService = {
             const messages = await redis.lrange(`messages:${chatId}`, 0, -1);
             if (messages.length > 0) {
                 await redis.del(`messages:${chatId}`);
+                const result = await redis.ping();
+                return result === 'PONG';
+            } catch (error) {
+                return false;
             }
-            return messages.map(Number);
-        } catch (error) {
-            console.error(`Ошибка получения сообщений для ${chatId}:`, error);
-            return [];
         }
-    }
 };
 
-module.exports = sessionService;
+    module.exports = sessionService;
