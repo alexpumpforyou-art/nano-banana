@@ -4,6 +4,7 @@ const GeminiService = require('./gemini-service');
 const YookassaService = require('./yookassa-service');
 const ImageService = require('./image-service');
 const sessionService = require('./session-service');
+const { generationQueue } = require('./queue-service');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, {
