@@ -1402,9 +1402,11 @@ _Пример: "Убеди фон"_
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: '💎 35 кредитов - 100₽', callback_data: 'buy_rub_100' }],
-        [{ text: '💎 150 кредитов - 300₽ (Выгодно)', callback_data: 'buy_rub_300' }],
-        [{ text: '💎 400 кредитов - 500₽ (🔥 2.5₽/фото)', callback_data: 'buy_rub_500' }],
+        [{ text: '💎 10 кредитов - 50₽ (10₽/фото)', callback_data: 'buy_rub_50' }],
+        [{ text: '💎 60 кредитов - 250₽ (8.3₽/фото)', callback_data: 'buy_rub_250' }],
+        [{ text: '💎 140 кредитов - 500₽ (7.1₽/фото)', callback_data: 'buy_rub_500' }],
+        [{ text: '💎 350 кредитов - 1000₽ (5.7₽/фото)', callback_data: 'buy_rub_1000' }],
+        [{ text: '💎 4000 кредитов - 5000₽ (🔥 2.5₽/фото)', callback_data: 'buy_rub_5000' }],
         [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
       ]
     };
@@ -1423,10 +1425,12 @@ _Пример: "Убеди фон"_
 
     // Определяем количество кредитов
     switch (amount) {
-      case 100: credits = 35; break;
-      case 300: credits = 150; break;
-      case 500: credits = 400; break;
-      default: credits = Math.floor(amount / 2.85); // Fallback ~35 credits per 100 rub
+      case 50: credits = 10; break;
+      case 250: credits = 60; break;
+      case 500: credits = 140; break;
+      case 1000: credits = 350; break;
+      case 5000: credits = 4000; break;
+      default: credits = Math.floor(amount / 5); // Fallback ~10 credits per 50 rub
     }
 
     // Получаем пользователя
