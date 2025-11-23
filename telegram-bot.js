@@ -50,30 +50,37 @@ const YOOKASSA_PROVIDER_TOKEN = process.env.YOOKASSA_PROVIDER_TOKEN;
 // Генерируем пакеты кредитов
 const CREDIT_PACKAGES = [
   {
-    stars: 50,
-    price_rub: 100,
-    credits: 80,
-    label: `40 генераций`,
+    stars: 35,
+    price_rub: 50,
+    credits: 10,
+    label: `10 кредитов`,
+    description: 'Пробный'
+  },
+  {
+    stars: 165,
+    price_rub: 250,
+    credits: 60,
+    label: `60 кредитов`,
     description: 'Базовый'
   },
   {
-    stars: 250,
+    stars: 330,
     price_rub: 500,
-    credits: 500,
-    label: `250 генераций`,
+    credits: 140,
+    label: `140 кредитов`,
     description: 'Популярный'
   },
   {
-    stars: 500,
+    stars: 650,
     price_rub: 1000,
-    credits: 1000,
-    label: `500 генераций`,
+    credits: 350,
+    label: `350 генераций`,
     description: 'Выгодный'
   },
   {
-    stars: 2500,
+    stars: 3300,
     price_rub: 5000,
-    credits: 8000,
+    credits: 4000,
     label: `4000 генераций`,
     description: 'Максимальный 🔥'
   }
