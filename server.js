@@ -222,6 +222,25 @@ app.post('/yookassa/webhook', async (req, res) => {
           }
         }
       }
+    } else if (event === 'payment.canceled') {
+      const metadata = object.metadata || {};
+      const userId = metadata.userId;
+
+      console.log(`❌ ЮKassa: Платеж отменен/не удался для пользователя ${userId}`);
+
+      if (userId) {
+        const user = userQueries.getAdminUserById.get(userId);
+        if (telegramBot && user && user.telegram_id) {
+          try {
+            await telegramBot.sendMessage(
+              user.telegram_id,
+              `❌ Оплата не прошла или была отменена.\n\nЕсли деньги списались, они вернутся автоматически. Попробуйте снова или выберите другой способ оплаты.`
+            );
+          } catch (e) {
+            console.error('Ошибка отправки уведомления об отмене:', e.message);
+          }
+        }
+      }
     }
 
     res.status(200).send('OK');
