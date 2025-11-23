@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { userQueries, transactionQueries, generationQueries, referralQueries, contentQueries, generateReferralCode } = require('./database');
+const { userQueries, transactionQueries, generationQueries, referralQueries, contentQueries, generateReferralCode } = require('./database-postgres');
 const GeminiService = require('./gemini-service');
 const YookassaService = require('./yookassa-service');
 const ImageService = require('./image-service');
@@ -216,32 +216,41 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   try {
     await deleteOldMessages(chatId); // Удаляем старые сообщения
 
-    let user = userQueries.getByTelegramId.get(chatId.toString());
+    let user = await userQueries.getByTelegramId(chatId.toString());
     let isNewUser = false;
 
     if (!user) {
       // Новый пользователь - создаем с реферальным кодом
       const newReferralCode = generateReferralCode();
-      user = userQueries.getOrCreateTelegramUser.get(
+      let referrerId = null;
+      if (referralCode) {
+        const referrer = await userQueries.getByReferralCode(referralCode);
+        if (referrer && referrer.telegram_id !== chatId.toString()) {
+          referrerId = referrer.id;
+        }
+      }
+
+      const newUser = await userQueries.getOrCreateTelegramUser(
         chatId.toString(),
         username,
-        FREE_CREDITS,
+        FREE_CREDITS + (referrerId ? REFERRAL_BONUS : 0),
         newReferralCode
       );
+      user = newUser; // Обновляем user для дальнейшего использования
       isNewUser = true;
 
       // Если пришел по реферальной ссылке
       if (referralCode) {
-        const referrer = userQueries.getByReferralCode.get(referralCode);
+        const referrer = await userQueries.getByReferralCode(referralCode);
         if (referrer && referrer.telegram_id !== chatId.toString()) {
           // Устанавливаем реферера
-          userQueries.setReferrer.run(referrer.id, user.id);
+          await userQueries.setReferrer(referrer.id, newUser.id);
 
           // Начисляем бонус рефереру
-          userQueries.addReferralBonus.run(REFERRAL_BONUS, REFERRAL_BONUS, referrer.id);
+          await userQueries.addReferralBonus(REFERRAL_BONUS, REFERRAL_BONUS, referrer.id);
 
           // Записываем в таблицу рефералов
-          referralQueries.create.run(referrer.id, user.id, REFERRAL_BONUS);
+          await referralQueries.create(referrer.id, newUser.id, REFERRAL_BONUS);
 
           // Уведомляем реферера
           try {
@@ -257,7 +266,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     }
 
     // Получаем динамический контент приветствия
-    let welcomeContent = contentQueries.getByType.get('welcome');
+    let welcomeContent = await contentQueries.getByType('welcome');
     let welcomeText = welcomeContent?.text ||
       `🍌 *Добро пожаловать в Nano Banana!*
 
@@ -300,7 +309,7 @@ _Пример: "Добавь солнечные очки"_
       .replace(/>/g, '&gt;')    // Экранируем >
       .replace(/\*([^*]+)\*/g, '<b>$1</b>')  // *текст* -> <b>текст</b>
       .replace(/_([^_]+)_/g, '<i>$1</i>')   // _текст_ -> <i>текст</i>
-      .replace(/`([^`]+)`/g, '<code>$1</code>'); // `текст` -> <code>текст</code>
+      .replace(/`([^`]+)`/g, '<code>$1</code>'); // `текст` -> <code>$1</code>
 
     const keyboard = {
       inline_keyboard: [
@@ -354,13 +363,13 @@ bot.onText(/\/balance/, async (msg) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
-    const refCount = userQueries.countReferrals.get(user.id);
+    const refCount = await userQueries.countReferrals(user.id);
 
     const balanceText = `
 💎 *Ваша статистика*
@@ -388,7 +397,7 @@ bot.onText(/\/buy/, async (msg) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
@@ -427,13 +436,13 @@ bot.onText(/\/history/, async (msg) => {
   const chatId = msg.chat.id;
 
   try {
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
-    const history = generationQueries.getHistory.all(user.id, 5);
+    const history = await generationQueries.getHistory(user.id, 5);
 
     if (history.length === 0) {
       return await bot.sendMessage(chatId, '📝 История генераций пуста.');
@@ -501,29 +510,29 @@ bot.onText(/\/stats/, async (msg) => {
     const db = require('./database');
 
     // Общая статистика пользователей
-    const totalUsers = db.db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const totalUsers = await db.db.prepare('SELECT COUNT(*) as count FROM users').get();
 
     // Общая статистика транзакций
-    const totalPurchases = db.db.prepare(`
+    const totalPurchases = await db.db.prepare(`
       SELECT COUNT(*) as count, SUM(amount) as total_stars 
       FROM transactions WHERE type = 'purchase'
     `).get();
 
     // Общая статистика генераций
-    const totalGenerations = db.db.prepare(`
+    const totalGenerations = await db.db.prepare(`
       SELECT COUNT(*) as count, SUM(credits_used) as total_credits 
       FROM generations
     `).get();
 
     // Генерации за последние 24 часа
-    const recentGens = db.db.prepare(`
+    const recentGens = await db.db.prepare(`
       SELECT COUNT(*) as count 
       FROM generations 
       WHERE created_at > datetime('now', '-1 day')
     `).get();
 
     // Топ пользователей по покупкам
-    const topBuyers = db.db.prepare(`
+    const topBuyers = await db.db.prepare(`
       SELECT u.username, SUM(t.amount) as total_spent
       FROM users u
       JOIN transactions t ON u.id = t.user_id
@@ -590,13 +599,13 @@ bot.onText(/\/referral/, async (msg) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
     }
 
-    const referrals = userQueries.getReferrals.all(user.id);
+    const referrals = await userQueries.getReferrals(user.id);
     const refCount = referrals.length;
 
     // Получаем имя бота для ссылки
@@ -914,13 +923,13 @@ bot.onText(/\/adminuser\s+(\S+)/, async (msg, match) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    const user = await userQueries.getByTelegramId(targetTelegramId);
 
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
 
-    const refCount = userQueries.countReferrals.get(user.id);
+    const refCount = await userQueries.countReferrals(user.id);
 
     const userInfo = `
 👤 *Информация о пользователе*
@@ -955,14 +964,14 @@ bot.onText(/\/adminadd\s+(\S+)\s+(\d+)/, async (msg, match) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    const user = await userQueries.getByTelegramId(targetTelegramId);
 
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
 
-    userQueries.updateCredits.run(creditsToAdd, user.id);
-    transactionQueries.create.run(user.id, 'admin_bonus', creditsToAdd, 0, 'Начислено администратором');
+    await userQueries.updateCredits(creditsToAdd, user.id);
+    await transactionQueries.create(user.id, 'admin_bonus', creditsToAdd, 0, 'Начислено администратором');
 
     await bot.sendMessage(targetTelegramId, `🎁 Вам начислено ${creditsToAdd} кредитов от администратора!`);
     await sendAndRemember(chatId, `✅ Пользователю @${user.username} начислено ${creditsToAdd} кредитов`);
@@ -983,13 +992,13 @@ bot.onText(/\/adminblock\s+(\S+)/, async (msg, match) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    const user = await userQueries.getByTelegramId(targetTelegramId);
 
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
 
-    userQueries.setBlocked.run(1, user.id);
+    await userQueries.setBlocked(1, user.id);
     await sendAndRemember(chatId, `✅ Пользователь @${user.username} заблокирован`);
   } catch (error) {
     console.error('Ошибка в /adminblock:', error);
@@ -1008,13 +1017,13 @@ bot.onText(/\/adminunblock\s+(\S+)/, async (msg, match) => {
   try {
     await deleteOldMessages(chatId);
 
-    const user = userQueries.getByTelegramId.get(targetTelegramId);
+    const user = await userQueries.getByTelegramId(targetTelegramId);
 
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден.');
     }
 
-    userQueries.setBlocked.run(0, user.id);
+    await userQueries.setBlocked(0, user.id);
     await sendAndRemember(chatId, `✅ Пользователь @${user.username} разблокирован`);
   } catch (error) {
     console.error('Ошибка в /adminunblock:', error);
@@ -1044,13 +1053,13 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_balance') {
     console.log(`[${INSTANCE_ID}] Processing menu_balance for ${chatId}`);
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
-      const refCount = userQueries.countReferrals.get(user.id);
+      const refCount = await userQueries.countReferrals(user.id);
 
       const balanceText = `
 💎 *Ваша статистика*
@@ -1077,7 +1086,7 @@ bot.on('callback_query', async (query) => {
     }
   } else if (data === 'menu_buy') {
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
@@ -1113,13 +1122,13 @@ bot.on('callback_query', async (query) => {
     }
   } else if (data === 'menu_referral') {
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
-      const referrals = userQueries.getReferrals.all(user.id);
+      const referrals = await userQueries.getReferrals(user.id);
       const refCount = referrals.length;
 
       // Получаем имя бота для ссылки
@@ -1161,13 +1170,13 @@ bot.on('callback_query', async (query) => {
     }
   } else if (data === 'menu_history') {
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
       }
 
-      const history = generationQueries.getHistory.all(user.id, 5);
+      const history = await generationQueries.getHistory(user.id, 5);
 
       if (history.length === 0) {
         const backButton = {
@@ -1281,10 +1290,10 @@ _Пример: "Убеди фон"_
 
       const db = require('./database');
 
-      const totalUsers = db.db.prepare('SELECT COUNT(*) as count FROM users').get();
-      const totalPurchases = db.db.prepare(`SELECT COUNT(*) as count, SUM(amount) as total_stars FROM transactions WHERE type = 'purchase'`).get();
-      const totalGenerations = db.db.prepare(`SELECT COUNT(*) as count, SUM(credits_used) as total_credits FROM generations`).get();
-      const recentGens = db.db.prepare(`SELECT COUNT(*) as count FROM generations WHERE created_at > datetime('now', '-1 day')`).get();
+      const totalUsers = await db.db.prepare('SELECT COUNT(*) as count FROM users').get();
+      const totalPurchases = await db.db.prepare(`SELECT COUNT(*) as count, SUM(amount) as total_stars FROM transactions WHERE type = 'purchase'`).get();
+      const totalGenerations = await db.db.prepare(`SELECT COUNT(*) as count, SUM(credits_used) as total_credits FROM generations`).get();
+      const recentGens = await db.db.prepare(`SELECT COUNT(*) as count FROM generations WHERE created_at > datetime('now', '-1 day')`).get();
 
       const avgPurchase = totalPurchases.total_stars && totalPurchases.count ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1) : 0;
       const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01;
@@ -1320,10 +1329,10 @@ _Пример: "Убеди фон"_
     try {
       await bot.answerCallbackQuery(query.id);
 
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       // Используем динамический контент приветствия
-      const welcomeContent = contentQueries.getByType.get('welcome');
+      const welcomeContent = await contentQueries.getByType('welcome');
       let welcomeText = welcomeContent?.text ||
         `🍌 *Главное меню*
 
@@ -1379,7 +1388,7 @@ _Пример: "Убеди фон"_
   } else if (data === 'check_balance') {
     // Обработка проверки баланса
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.answerCallbackQuery(query.id, {
@@ -1441,7 +1450,7 @@ _Пример: "Убеди фон"_
     }
 
     // Получаем пользователя
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     // Сохраняем состояние
     userStates.set(chatId, {
@@ -1619,7 +1628,7 @@ bot.on('successful_payment', async (msg) => {
   console.log(`💰 Успешный платеж: ${totalAmount} ${currency} от пользователя ${chatId}`);
 
   try {
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, '❌ Пользователь не найден. Используйте /start');
@@ -1642,10 +1651,10 @@ bot.on('successful_payment', async (msg) => {
     }
 
     // Начисляем кредиты
-    userQueries.updateCredits.run(package_.credits, user.id);
+    await userQueries.updateCredits(package_.credits, user.id);
 
     // Записываем транзакцию
-    transactionQueries.create.run(
+    await transactionQueries.create(
       user.id,
       'purchase',
       package_.credits,
@@ -1763,7 +1772,7 @@ bot.on('message', async (msg) => {
   if (hasPhoto && prompt && prompt.trim().length > 0) {
     // ==================== РЕДАКТИРОВАНИЕ ИЗОБРАЖЕНИЯ ====================
     try {
-      const user = userQueries.getByTelegramId.get(chatId.toString());
+      const user = await userQueries.getByTelegramId(chatId.toString());
 
       if (!user) {
         return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
@@ -1809,13 +1818,13 @@ bot.on('message', async (msg) => {
       const creditsUsed = PRICES.IMAGE_EDIT;
 
       // Списываем кредиты
-      userQueries.updateCredits.run(-creditsUsed, user.id);
-      userQueries.incrementGenerations.run(creditsUsed, user.id);
+      await userQueries.updateCredits(-creditsUsed, user.id);
+      await userQueries.incrementGenerations(creditsUsed, user.id);
 
-      // Сохраняем с изображением в base64
+      // Сохраняем генерацию с изображением в base64
       const imageBase64 = result.imageBuffer.toString('base64');
-      generationQueries.create.run(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit', imageBase64);
-      transactionQueries.create.run(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
+      await generationQueries.create(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit', imageBase64);
+      await transactionQueries.create(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
 
       const newBalance = user.credits - creditsUsed;
 
@@ -1854,7 +1863,7 @@ bot.on('message', async (msg) => {
   }
 
   try {
-    const user = userQueries.getByTelegramId.get(chatId.toString());
+    const user = await userQueries.getByTelegramId(chatId.toString());
 
     if (!user) {
       return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
@@ -1901,15 +1910,15 @@ bot.on('message', async (msg) => {
         const result = await imageService.generateImage(imagePrompt);
 
         // Списываем кредиты
-        userQueries.updateCredits.run(-creditsUsed, user.id);
-        userQueries.incrementGenerations.run(creditsUsed, user.id);
+        await userQueries.updateCredits(-creditsUsed, user.id);
+        await userQueries.incrementGenerations(creditsUsed, user.id);
 
         // Сохраняем генерацию с изображением в base64
         const imageBase64 = result.imageBuffer.toString('base64');
-        generationQueries.create.run(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
+        await generationQueries.create(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
 
         // Сохраняем транзакцию
-        transactionQueries.create.run(
+        await transactionQueries.create(
           user.id,
           'generation',
           -creditsUsed,
@@ -1956,20 +1965,11 @@ bot.on('message', async (msg) => {
       }
 
       // Списываем кредиты
-      userQueries.updateCredits.run(-creditsUsed, user.id);
-      userQueries.incrementGenerations.run(creditsUsed, user.id);
+      await userQueries.updateCredits(-creditsUsed, user.id);
+      await userQueries.incrementGenerations(creditsUsed, user.id);
 
-      // Сохраняем генерацию (image_data = null для текста)
-      generationQueries.create.run(user.id, prompt, result.text, creditsUsed, 'text', null);
-
-      // Сохраняем транзакцию
-      transactionQueries.create.run(
-        user.id,
-        'generation',
-        -creditsUsed,
-        0,
-        'Генерация текста'
-      );
+      await generationQueries.create(user.id, prompt, result.text, creditsUsed, 'text', null);
+      await transactionQueries.create(user.id, 'generation', -creditsUsed, 0, 'Генерация текста');
 
       const newBalance = user.credits - creditsUsed;
 

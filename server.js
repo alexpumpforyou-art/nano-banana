@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const { db, userQueries, transactionQueries, generationQueries, contentQueries } = require('./database');
+const { knex, userQueries, transactionQueries, generationQueries, contentQueries } = require('./database-postgres');
 const GeminiService = require('./gemini-service');
 const YookassaService = require('./yookassa-service');
 
@@ -29,7 +29,7 @@ app.use(express.static('public'));
 // ==================== WEB API ====================
 
 // Получить или создать веб-пользователя
-app.post('/api/auth', (req, res) => {
+app.post('/api/auth', async (req, res) => {
   try {
     let { webId } = req.body;
 
@@ -38,7 +38,7 @@ app.post('/api/auth', (req, res) => {
     }
 
     const freeTokens = parseInt(process.env.FREE_TOKENS) || 100;
-    const user = userQueries.getOrCreateWebUser.get(webId, freeTokens);
+    const user = await userQueries.getOrCreateWebUser(webId, freeTokens);
 
     res.json({
       success: true,
@@ -55,7 +55,7 @@ app.post('/api/auth', (req, res) => {
 });
 
 // Получить баланс пользователя
-app.get('/api/balance/:webId', (req, res) => {
+app.get('/api/balance/:webId', async (req, res) => {
   try {
     const user = userQueries.getByWebId.get(req.params.webId);
 
@@ -82,7 +82,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     // Получаем пользователя
-    const user = userQueries.getByWebId.get(webId);
+    const user = await userQueries.getByWebId(webId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
@@ -109,13 +109,13 @@ app.post('/api/generate', async (req, res) => {
     }
 
     // Списываем токены
-    userQueries.updateTokens.run(-result.tokensUsed, user.id);
+    await userQueries.updateCredits(-result.tokensUsed, user.id);
 
     // Сохраняем генерацию
-    generationQueries.create.run(user.id, prompt, result.text, result.tokensUsed);
+    await generationQueries.create(user.id, prompt, result.text, result.tokensUsed);
 
     // Сохраняем транзакцию
-    transactionQueries.create.run(
+    await transactionQueries.create(
       user.id,
       'generation',
       -result.tokensUsed,
@@ -137,15 +137,15 @@ app.post('/api/generate', async (req, res) => {
 });
 
 // История генераций
-app.get('/api/history/:webId', (req, res) => {
+app.get('/api/history/:webId', async (req, res) => {
   try {
-    const user = userQueries.getByWebId.get(req.params.webId);
+    const user = await userQueries.getByWebId(req.params.webId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
 
     const limit = parseInt(req.query.limit) || 10;
-    const history = generationQueries.getHistory.all(user.id, limit);
+    const history = await generationQueries.getHistory(user.id, limit);
 
     res.json({
       success: true,
@@ -157,15 +157,15 @@ app.get('/api/history/:webId', (req, res) => {
 });
 
 // История транзакций
-app.get('/api/transactions/:webId', (req, res) => {
+app.get('/api/transactions/:webId', async (req, res) => {
   try {
-    const user = userQueries.getByWebId.get(req.params.webId);
+    const user = await userQueries.getByWebId(req.params.webId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'Пользователь не найден' });
     }
 
     const limit = parseInt(req.query.limit) || 20;
-    const transactions = transactionQueries.getHistory.all(user.id, limit);
+    const transactions = await transactionQueries.getHistory(user.id, limit);
 
     res.json({
       success: true,
@@ -202,12 +202,12 @@ app.post('/yookassa/webhook', async (req, res) => {
         }
 
         // Получаем пользователя для проверки существования
-        const user = userQueries.getAdminUserById.get(userId);
+        const user = await userQueries.getAdminUserById(userId);
 
         if (user) {
-          userQueries.updateCredits.run(creditsToAdd, userId);
+          await userQueries.updateCredits(creditsToAdd, userId);
 
-          transactionQueries.create.run(
+          await transactionQueries.create(
             userId,
             'purchase_yookassa',
             creditsToAdd,
@@ -235,7 +235,7 @@ app.post('/yookassa/webhook', async (req, res) => {
       console.log(`❌ ЮKassa: Платеж отменен/не удался для пользователя ${userId}`);
 
       if (userId) {
-        const user = userQueries.getAdminUserById.get(userId);
+        const user = await userQueries.getAdminUserById(userId);
         if (telegramBot && user && user.telegram_id) {
           try {
             await telegramBot.sendMessage(
