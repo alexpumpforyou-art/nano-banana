@@ -111,6 +111,7 @@ class ImageService {
       return Buffer.from(data.predictions[0].bytesBase64Encoded, 'base64');
     }
 
+    console.error('❌ Unexpected REST response structure:', JSON.stringify(data, null, 2));
     throw new Error('No image data in REST response');
   }
 
@@ -160,6 +161,12 @@ class ImageService {
 
         if (!imageBuffer) {
           console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не вернула изображение`);
+          if (response.candidates && response.candidates[0] && response.candidates[0].content) {
+            console.error('Response content:', JSON.stringify(response.candidates[0].content, null, 2));
+          }
+          if (response.promptFeedback) {
+            console.error('Prompt feedback:', JSON.stringify(response.promptFeedback, null, 2));
+          }
           throw new Error('Модель вернула пустой результат');
         }
 

@@ -507,40 +507,36 @@ bot.onText(/\/stats/, async (msg) => {
   }
 
   try {
-    const db = require('./database');
+    const db = require('./database-postgres');
 
     // Общая статистика пользователей
-    const totalUsers = await db.db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const totalUsers = await db.knex('users').count('* as count').first();
 
     // Общая статистика транзакций
-    const totalPurchases = await db.db.prepare(`
-      SELECT COUNT(*) as count, SUM(amount) as total_stars 
-      FROM transactions WHERE type = 'purchase'
-    `).get();
+    const totalPurchases = await db.knex('transactions')
+      .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(amount) as total_stars"))
+      .where('type', 'purchase')
+      .first();
 
     // Общая статистика генераций
-    const totalGenerations = await db.db.prepare(`
-      SELECT COUNT(*) as count, SUM(credits_used) as total_credits 
-      FROM generations
-    `).get();
+    const totalGenerations = await db.knex('generations')
+      .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(cost) as total_credits"))
+      .first();
 
     // Генерации за последние 24 часа
-    const recentGens = await db.db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM generations 
-      WHERE created_at > datetime('now', '-1 day')
-    `).get();
+    const recentGens = await db.knex('generations')
+      .count('* as count')
+      .where('created_at', '>', db.knex.raw("NOW() - INTERVAL '1 DAY'"))
+      .first();
 
     // Топ пользователей по покупкам
-    const topBuyers = await db.db.prepare(`
-      SELECT u.username, SUM(t.amount) as total_spent
-      FROM users u
-      JOIN transactions t ON u.id = t.user_id
-      WHERE t.type = 'purchase'
-      GROUP BY u.id
-      ORDER BY total_spent DESC
-      LIMIT 5
-    `).all();
+    const topBuyers = await db.knex('users as u')
+      .join('transactions as t', 'u.id', 't.user_id')
+      .select('u.username')
+      .sum('t.amount as total_spent')
+      .groupBy('u.username')
+      .orderBy('total_spent', 'desc')
+      .limit(5);
 
     // Средний чек
     const avgPurchase = totalPurchases.total_stars && totalPurchases.count
@@ -1288,12 +1284,20 @@ _Пример: "Убеди фон"_
     try {
       await bot.answerCallbackQuery(query.id);
 
-      const db = require('./database');
+      const db = require('./database-postgres');
 
-      const totalUsers = await db.db.prepare('SELECT COUNT(*) as count FROM users').get();
-      const totalPurchases = await db.db.prepare(`SELECT COUNT(*) as count, SUM(amount) as total_stars FROM transactions WHERE type = 'purchase'`).get();
-      const totalGenerations = await db.db.prepare(`SELECT COUNT(*) as count, SUM(credits_used) as total_credits FROM generations`).get();
-      const recentGens = await db.db.prepare(`SELECT COUNT(*) as count FROM generations WHERE created_at > datetime('now', '-1 day')`).get();
+      const totalUsers = await db.knex('users').count('* as count').first();
+      const totalPurchases = await db.knex('transactions')
+        .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(amount) as total_stars"))
+        .where('type', 'purchase')
+        .first();
+      const totalGenerations = await db.knex('generations')
+        .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(cost) as total_credits"))
+        .first();
+      const recentGens = await db.knex('generations')
+        .count('* as count')
+        .where('created_at', '>', db.knex.raw("NOW() - INTERVAL '1 DAY'"))
+        .first();
 
       const avgPurchase = totalPurchases.total_stars && totalPurchases.count ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1) : 0;
       const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01;
