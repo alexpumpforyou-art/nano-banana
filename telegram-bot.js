@@ -3,6 +3,7 @@ const { userQueries, transactionQueries, generationQueries, referralQueries, con
 const GeminiService = require('./gemini-service');
 const YookassaService = require('./yookassa-service');
 const ImageService = require('./image-service');
+const sessionService = require('./session-service');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(token, {
@@ -87,12 +88,13 @@ const CREDIT_PACKAGES = [
 ];
 
 // Для удаления старых сообщений
-const userLastMessages = new Map(); // chatId -> [messageIds]
-const userStates = new Map(); // chatId -> { state: string, data: any }
+// Для удаления старых сообщений
+// const userLastMessages = new Map(); // Moved to Redis
+// const userStates = new Map(); // Moved to Redis
 
 // Функция удаления старых сообщений
 async function deleteOldMessages(chatId) {
-  const messages = userLastMessages.get(chatId) || [];
+  const messages = await sessionService.popLastMessages(chatId);
   for (const msgId of messages) {
     try {
       await bot.deleteMessage(chatId, msgId);
@@ -100,15 +102,19 @@ async function deleteOldMessages(chatId) {
       // Игнорируем ошибки удаления (сообщение уже удалено или слишком старое)
     }
   }
-  userLastMessages.set(chatId, []);
+  await sessionService.clearState(chatId);
+  // userLastMessages.delete(chatId); // Handled by popLastMessages
+}
+
+// Функция сохранения сообщения для удаления
+async function rememberMessage(chatId, messageId) {
+  await sessionService.addLastMessage(chatId, messageId);
 }
 
 // Функция отправки сообщения с запоминанием ID
 async function sendAndRemember(chatId, text, options = {}) {
   const sentMsg = await bot.sendMessage(chatId, text, options);
-  const messages = userLastMessages.get(chatId) || [];
-  messages.push(sentMsg.message_id);
-  userLastMessages.set(chatId, messages);
+  await rememberMessage(chatId, sentMsg.message_id);
   return sentMsg;
 }
 
@@ -423,9 +429,7 @@ bot.onText(/\/buy/, async (msg) => {
       { reply_markup: keyboard, parse_mode: 'Markdown' }
     );
 
-    const messages = userLastMessages.get(chatId) || [];
-    messages.push(sentMsg.message_id);
-    userLastMessages.set(chatId, messages);
+    await rememberMessage(chatId, sentMsg.message_id);
   } catch (error) {
     console.error('Ошибка в /buy:', error);
     await bot.sendMessage(chatId, '❌ Ошибка при отображении пакетов.');
@@ -1109,9 +1113,7 @@ bot.on('callback_query', async (query) => {
       await bot.answerCallbackQuery(query.id);
       const sentMsg = await bot.sendMessage(chatId, priceInfo, { reply_markup: keyboard, parse_mode: 'Markdown' });
 
-      const messages = userLastMessages.get(chatId) || [];
-      messages.push(sentMsg.message_id);
-      userLastMessages.set(chatId, messages);
+      await rememberMessage(chatId, sentMsg.message_id);
     } catch (error) {
       console.error('Ошибка menu_buy:', error);
       await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
@@ -1457,7 +1459,7 @@ _Пример: "Убеди фон"_
     const user = await userQueries.getByTelegramId(chatId.toString());
 
     // Сохраняем состояние
-    userStates.set(chatId, {
+    await sessionService.setState(chatId, {
       state: 'WAITING_EMAIL',
       data: {
         amount: amount,
@@ -1487,22 +1489,6 @@ _Пример: "Убеди фон"_
       ]
     };
     await bot.editMessageText('Выберите пакет (оплата Telegram Stars):', {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: keyboard
-    });
-  } else if (data === 'buy_method_rub') {
-    // Показываем пакеты за Рубли
-    const keyboard = {
-      inline_keyboard: [
-        ...CREDIT_PACKAGES.map(pkg => [{
-          text: `₽ ${pkg.price_rub} → ${pkg.label}`,
-          callback_data: `buy_rub_${pkg.stars}` // используем stars как ID пакета для простоты
-        }]),
-        [{ text: '◀️ Назад', callback_data: 'menu_buy' }]
-      ]
-    };
-    await bot.editMessageText('Выберите пакет (оплата ЮKassa):', {
       chat_id: chatId,
       message_id: messageId,
       reply_markup: keyboard
@@ -1709,10 +1695,10 @@ bot.on('message', async (msg) => {
   if (msg.text && msg.text.startsWith('/')) return;
 
   const chatId = msg.chat.id;
-  const state = userStates.get(chatId);
+  const userState = await sessionService.getState(chatId);
 
   // Обработка ввода email для оплаты
-  if (state && state.state === 'WAITING_EMAIL' && msg.text) {
+  if (userState && userState.state === 'WAITING_EMAIL' && msg.text) {
     const email = msg.text.trim();
     // Простая валидация email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1721,8 +1707,8 @@ bot.on('message', async (msg) => {
       return await bot.sendMessage(chatId, '❌ Некорректный email. Попробуйте еще раз.');
     }
 
-    const amount = state.data.amount;
-    const credits = state.data.credits;
+    const amount = userState.data.amount;
+    const credits = userState.data.credits;
 
     try {
       await bot.sendMessage(chatId, '⏳ Создаю платеж...');
@@ -1731,7 +1717,7 @@ bot.on('message', async (msg) => {
         amount,
         `Покупка ${credits} кредитов (Nano Banana)`,
         `https://t.me/${(await bot.getMe()).username}`, // Возврат в бота
-        { userId: state.data.userId, email: email, credits: credits }
+        { userId: userState.data.userId, email: email, credits: credits }
       );
 
       if (payment.confirmation && payment.confirmation.confirmation_url) {
@@ -1752,13 +1738,13 @@ bot.on('message', async (msg) => {
       }
 
       // Сбрасываем состояние
-      userStates.delete(chatId);
+      await sessionService.deleteState(chatId);
       return;
 
     } catch (error) {
       console.error('Ошибка создания платежа:', error);
       await bot.sendMessage(chatId, '❌ Ошибка при создании платежа. Попробуйте позже.');
-      userStates.delete(chatId);
+      await sessionService.deleteState(chatId);
       return;
     }
   }
