@@ -435,6 +435,26 @@ app.get('/api/admin/requests', requireAdmin, async (req, res) => {
   }
 });
 
+// Получить изображение генерации (lazy load)
+app.get('/api/admin/generation/:id/image', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const generation = await generationQueries.getGenerationImage(id);
+
+    if (!generation || !generation.image_data) {
+      return res.status(404).json({ success: false, error: 'Изображение не найдено' });
+    }
+
+    res.json({
+      success: true,
+      image_data: generation.image_data
+    });
+  } catch (error) {
+    console.error('Ошибка получения изображения:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Начислить кредиты пользователю
 app.post('/api/admin/add-credits', requireAdmin, async (req, res) => {
   try {

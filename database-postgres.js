@@ -131,7 +131,7 @@ const userQueries = {
                 'g.result as response',
                 'g.cost as credits_used',
                 'g.type',
-                'g.image_data',
+                // 'g.image_data', // Exclude heavy image data from list view
                 'g.created_at',
                 'u.id as user_id',
                 'u.username',
@@ -209,6 +209,13 @@ const generationQueries = {
             type,
             image_data: imageData
         });
+    },
+
+    async getGenerationImage(id) {
+        return knex('generations')
+            .select('image_data')
+            .where('id', id)
+            .first();
     },
 
     async getHistory(userId, limit) {

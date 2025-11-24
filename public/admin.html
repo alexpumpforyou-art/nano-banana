@@ -1202,8 +1202,7 @@
                         }
                         </div>
 
-                        ${
-                referrals.length > 0 ? `
+                        ${referrals.length > 0 ? `
                             <div class="modal-section">
                                 <h3>Рефералы (${referrals.length})</h3>
                                 ${referrals.map(ref => `
@@ -1219,7 +1218,7 @@
                                 `).join('')}
                             </div>
                         ` : ''
-            }
+                        }
             `;
                 }
             } catch (error) {
@@ -1435,7 +1434,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const {results} = data;
+                    const { results } = data;
 
                     // Обновляем прогресс
                     const percentage = (results.sent / results.total) * 100;
@@ -1795,9 +1794,10 @@
                             typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
                         }
 
-                        const imagePreview = req.image_data
-                            ? `<img src="data:image/png;base64,${req.image_data}" style="max-width: 150px; max-height: 150px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${req.image_data}')" title="Нажмите для увеличения">`
-                            : '-';
+                        let imagePreview = '-';
+                        if (req.type === 'image' || req.type === 'image_edit') {
+                            imagePreview = `<button class="btn btn-success" style="padding: 5px 10px; font-size: 12px;" onclick="loadAndShowImage(${req.id})">👁️ Просмотр</button>`;
+                        }
 
                         return `
                     <tr>
@@ -1820,6 +1820,28 @@
                 }
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
+            }
+        }
+
+        // Load and show image (lazy load)
+        async function loadAndShowImage(id) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+
+            try {
+                const data = await apiCall(`/api/admin/generation/${id}/image`);
+                if (data.success && data.image_data) {
+                    showImageModal(`data:image/png;base64,${data.image_data}`);
+                } else {
+                    alert('Изображение не найдено');
+                }
+            } catch (error) {
+                alert('Ошибка загрузки изображения: ' + error.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
         }
 
