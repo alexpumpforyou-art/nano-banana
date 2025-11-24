@@ -42,8 +42,6 @@ async function autoMigrate() {
         const existingUsers = await knex('users').count('* as count').first();
         if (existingUsers && parseInt(existingUsers.count) > 0) {
             console.log(`ℹ️  Database already has ${existingUsers.count} users - skipping migration`);
-            await knex.destroy();
-            sqlite.close();
             return;
         }
 
@@ -114,15 +112,31 @@ async function autoMigrate() {
     } catch (error) {
         console.error('❌ Auto-migration failed:', error);
         throw error;
-    } finally {
-        await knex.destroy();
-        sqlite.close();
     }
 }
 
-autoMigrate()
-    .then(() => process.exit(0))
+// Run migration with timeout to prevent hanging
+const MIGRATION_TIMEOUT = 30000; // 30 seconds
+
+Promise.race([
+    autoMigrate(),
+    new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Migration timeout')), MIGRATION_TIMEOUT)
+    )
+])
+    .then(() => {
+        console.log('✅ Migration process completed');
+    })
     .catch(err => {
-        console.error(err);
-        process.exit(1);
+        console.error('⚠️  Migration failed or timed out:', err.message);
+        console.log('Server will start anyway...');
+    })
+    .finally(async () => {
+        try {
+            await knex.destroy();
+            sqlite.close();
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+        process.exit(0);
     });
