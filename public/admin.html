@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -513,6 +514,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Login Screen -->
     <div id="loginScreen">
@@ -534,7 +536,8 @@
         <header>
             <h1>🍌 Admin Panel - Nano Banana</h1>
             <div style="display: flex; gap: 10px;">
-                <button class="btn btn-success" onclick="openBroadcastModal()" style="padding: 10px 20px; font-size: 14px;">📢 Массовая рассылка</button>
+                <button class="btn btn-success" onclick="openBroadcastModal()"
+                    style="padding: 10px 20px; font-size: 14px;">📢 Массовая рассылка</button>
                 <button class="logout-btn" onclick="logout()">Выйти</button>
             </div>
         </header>
@@ -566,6 +569,10 @@
                     <h3>Получено Stars</h3>
                     <div class="value" id="totalStars">-</div>
                 </div>
+                <div class="stat-card info">
+                    <h3>Получено RUB (ЮKassa)</h3>
+                    <div class="value" id="totalRub">-</div>
+                </div>
             </div>
 
             <!-- Tabs -->
@@ -590,31 +597,31 @@
 
                 <!-- Users Table -->
                 <div class="users-table-container">
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Username</th>
-                                <th>Telegram ID</th>
-                                <th>Тип</th>
-                                <th>Кредиты</th>
-                                <th>Генераций</th>
-                                <th>Потрачено</th>
-                                <th>Рефералов</th>
-                                <th>Статус</th>
-                                <th>Регистрация</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersTableBody">
-                            <tr>
-                                <td colspan="11" class="loading">Загрузка...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Telegram ID</th>
+                                    <th>Тип</th>
+                                    <th>Кредиты</th>
+                                    <th>Генераций</th>
+                                    <th>Потрачено</th>
+                                    <th>Рефералов</th>
+                                    <th>Статус</th>
+                                    <th>Регистрация</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr>
+                                    <td colspan="11" class="loading">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
             </div>
 
             <!-- Requests Tab -->
@@ -656,22 +663,30 @@
                         <h3 id="contentEditorTitle">Редактирование контента</h3>
                         <div class="form-group" style="margin-top: 20px;">
                             <label for="contentTitle">Название</label>
-                            <input type="text" id="contentTitle" placeholder="Название контента" style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                            <input type="text" id="contentTitle" placeholder="Название контента"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label for="contentText">Текст</label>
-                            <textarea id="contentText" placeholder="Текст сообщения. Используйте {credits} для баланса, {generations} для количества генераций" style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px; min-height: 150px; font-family: inherit;"></textarea>
-                            <small style="color: var(--gray); margin-top: 5px; display: block;">Поддерживаются переменные: {credits}, {generations}, {username}</small>
+                            <textarea id="contentText"
+                                placeholder="Текст сообщения. Используйте {credits} для баланса, {generations} для количества генераций"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px; min-height: 150px; font-family: inherit;"></textarea>
+                            <small style="color: var(--gray); margin-top: 5px; display: block;">Поддерживаются
+                                переменные: {credits}, {generations}, {username}</small>
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label for="contentImage">Изображение</label>
-                            <input type="file" id="contentImage" accept="image/*" style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                            <input type="file" id="contentImage" accept="image/*"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
                             <div id="contentImagePreview" style="margin-top: 15px; display: none;">
-                                <img id="contentImagePreviewImg" src="" style="max-width: 300px; max-height: 300px; border-radius: 10px; border: 2px solid var(--light);">
-                                <button class="btn" style="background: var(--danger); color: white; margin-top: 10px;" onclick="removeContentImage()">Удалить изображение</button>
+                                <img id="contentImagePreviewImg" src=""
+                                    style="max-width: 300px; max-height: 300px; border-radius: 10px; border: 2px solid var(--light);">
+                                <button class="btn" style="background: var(--danger); color: white; margin-top: 10px;"
+                                    onclick="removeContentImage()">Удалить изображение</button>
                             </div>
                         </div>
-                        <div class="form-group" style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                        <div class="form-group"
+                            style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
                             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                                 <input type="checkbox" id="contentActive" checked>
                                 <span>Активен</span>
@@ -684,7 +699,8 @@
                         <div class="error-message" id="contentError" style="display: none; margin-top: 15px;"></div>
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
                             <button class="btn btn-success" onclick="saveContent()">💾 Сохранить</button>
-                            <button class="btn" style="background: var(--gray); color: white;" onclick="cancelContentEdit()">Отмена</button>
+                            <button class="btn" style="background: var(--gray); color: white;"
+                                onclick="cancelContentEdit()">Отмена</button>
                         </div>
                     </div>
                 </div>
@@ -736,7 +752,8 @@
                 <button class="close-btn" onclick="closeImageModal()">Закрыть</button>
             </div>
             <div style="padding: 20px;">
-                <img id="modalImage" src="" style="max-width: 100%; max-height: 80vh; border-radius: 10px;" alt="Изображение">
+                <img id="modalImage" src="" style="max-width: 100%; max-height: 80vh; border-radius: 10px;"
+                    alt="Изображение">
             </div>
         </div>
     </div>
@@ -752,20 +769,26 @@
                 <div class="send-message-form">
                     <div class="form-group">
                         <label>Пользователь</label>
-                        <div id="creditsRecipient" style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;"></div>
+                        <div id="creditsRecipient"
+                            style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="creditsAmount">Количество кредитов</label>
-                        <input type="number" id="creditsAmount" placeholder="Введите количество (можно отрицательное для списания)" required style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                        <input type="number" id="creditsAmount"
+                            placeholder="Введите количество (можно отрицательное для списания)" required
+                            style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
                     </div>
                     <div class="form-group">
                         <label for="creditsDescription">Описание (необязательно)</label>
-                        <input type="text" id="creditsDescription" placeholder="Причина начисления..." style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                        <input type="text" id="creditsDescription" placeholder="Причина начисления..."
+                            style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
                     </div>
                     <div class="error-message" id="addCreditsError" style="display: none;"></div>
                     <div class="btn-group">
                         <button class="btn btn-success" onclick="addCredits()">💰 Начислить</button>
-                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeAddCreditsModal()">Отмена</button>
+                        <button class="btn" style="background: var(--gray); color: white;"
+                            onclick="closeAddCreditsModal()">Отмена</button>
                     </div>
                 </div>
             </div>
@@ -783,12 +806,14 @@
                 <div class="send-message-form">
                     <div class="form-group">
                         <label for="broadcastMessage">Сообщение для рассылки</label>
-                        <textarea id="broadcastMessage" placeholder="Введите сообщение для массовой рассылки..." required style="min-height: 150px;"></textarea>
+                        <textarea id="broadcastMessage" placeholder="Введите сообщение для массовой рассылки..."
+                            required style="min-height: 150px;"></textarea>
                     </div>
-                    
+
                     <div class="form-group">
                         <label>Фильтры получателей</label>
-                        <div style="display: flex; flex-direction: column; gap: 10px; padding: 15px; background: var(--background); border-radius: 10px;">
+                        <div
+                            style="display: flex; flex-direction: column; gap: 10px; padding: 15px; background: var(--background); border-radius: 10px;">
                             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                                 <input type="checkbox" id="filterOnlyActive" checked>
                                 <span>Только активные пользователи (не заблокированные)</span>
@@ -800,42 +825,51 @@
                             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     <span>Мин. кредитов:</span>
-                                    <input type="number" id="filterMinCredits" placeholder="Не ограничено" style="width: 100px; padding: 5px;">
+                                    <input type="number" id="filterMinCredits" placeholder="Не ограничено"
+                                        style="width: 100px; padding: 5px;">
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     <span>Макс. кредитов:</span>
-                                    <input type="number" id="filterMaxCredits" placeholder="Не ограничено" style="width: 100px; padding: 5px;">
+                                    <input type="number" id="filterMaxCredits" placeholder="Не ограничено"
+                                        style="width: 100px; padding: 5px;">
                                 </label>
                             </div>
                         </div>
                     </div>
-                    
-                    <div id="broadcastPreview" style="padding: 15px; background: var(--background); border-radius: 10px; margin-bottom: 15px; display: none;">
+
+                    <div id="broadcastPreview"
+                        style="padding: 15px; background: var(--background); border-radius: 10px; margin-bottom: 15px; display: none;">
                         <strong>Предварительный просмотр:</strong>
                         <div id="broadcastPreviewText" style="margin-top: 10px; color: var(--gray);"></div>
                     </div>
-                    
+
                     <div class="error-message" id="broadcastError" style="display: none;"></div>
-                    
+
                     <div class="btn-group">
                         <button class="btn btn-success" onclick="startBroadcast()">📢 Начать рассылку</button>
-                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeBroadcastModal()">Отмена</button>
+                        <button class="btn" style="background: var(--gray); color: white;"
+                            onclick="closeBroadcastModal()">Отмена</button>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Progress Section -->
-            <div id="broadcastProgress" style="display: none; margin-top: 20px; padding: 20px; background: var(--background); border-radius: 10px;">
+            <div id="broadcastProgress"
+                style="display: none; margin-top: 20px; padding: 20px; background: var(--background); border-radius: 10px;">
                 <h3>Прогресс рассылки</h3>
                 <div style="margin: 15px 0;">
-                    <div style="background: var(--light); border-radius: 10px; height: 30px; position: relative; overflow: hidden;">
-                        <div id="broadcastProgressBar" style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;"></div>
+                    <div
+                        style="background: var(--light); border-radius: 10px; height: 30px; position: relative; overflow: hidden;">
+                        <div id="broadcastProgressBar"
+                            style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
+                        </div>
                     </div>
                     <div style="margin-top: 10px; text-align: center;">
                         <span id="broadcastProgressText">0 / 0</span>
                     </div>
                 </div>
-                <div id="broadcastResults" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 10px;">
+                <div id="broadcastResults"
+                    style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 10px;">
                     <h4>Результаты:</h4>
                     <div id="broadcastResultsText"></div>
                 </div>
@@ -854,16 +888,20 @@
                 <div class="send-message-form">
                     <div class="form-group">
                         <label>Получатель</label>
-                        <div id="messageRecipient" style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;"></div>
+                        <div id="messageRecipient"
+                            style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="messageText">Сообщение</label>
-                        <textarea id="messageText" placeholder="Введите сообщение для пользователя..." required></textarea>
+                        <textarea id="messageText" placeholder="Введите сообщение для пользователя..."
+                            required></textarea>
                     </div>
                     <div class="error-message" id="sendMessageError" style="display: none;"></div>
                     <div class="btn-group">
                         <button class="btn btn-success" onclick="sendMessage()">📤 Отправить</button>
-                        <button class="btn" style="background: var(--gray); color: white;" onclick="closeSendMessageModal()">Отмена</button>
+                        <button class="btn" style="background: var(--gray); color: white;"
+                            onclick="closeSendMessageModal()">Отмена</button>
                     </div>
                 </div>
             </div>
@@ -942,23 +980,6 @@
         async function loadData() {
             try {
                 // Load stats
-                const statsData = await apiCall('/api/admin/stats');
-                if (statsData.success) {
-                    const { users, transactions } = statsData.stats;
-                    document.getElementById('totalUsers').textContent = users.total_users || 0;
-                    document.getElementById('telegramUsers').textContent = users.telegram_users || 0;
-                    document.getElementById('totalGenerations').textContent = users.total_generations || 0;
-                    document.getElementById('totalSpent').textContent = users.total_spent_credits || 0;
-                    document.getElementById('blockedUsers').textContent = users.blocked_users || 0;
-                    document.getElementById('totalStars').textContent = transactions.total_stars_received || 0;
-                }
-
-                // Load users
-                const usersData = await apiCall('/api/admin/users');
-                if (usersData.success) {
-                    allUsers = usersData.users;
-                    renderUsers();
-                }
             } catch (error) {
                 console.error('Ошибка загрузки данных:', error);
             }
@@ -968,7 +989,7 @@
         function renderUsers() {
             const tbody = document.getElementById('usersTableBody');
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
+
             let filtered = allUsers;
 
             // Apply filter
@@ -982,7 +1003,7 @@
 
             // Apply search
             if (searchTerm) {
-                filtered = filtered.filter(u => 
+                filtered = filtered.filter(u =>
                     (u.username && u.username.toLowerCase().includes(searchTerm)) ||
                     (u.telegram_id && u.telegram_id.includes(searchTerm)) ||
                     (u.id && u.id.toString().includes(searchTerm)) ||
@@ -997,11 +1018,11 @@
 
             tbody.innerHTML = filtered.map(user => {
                 const type = user.telegram_id ? 'Telegram' : 'Web';
-                const status = user.is_blocked === 1 
+                const status = user.is_blocked === 1
                     ? '<span class="badge badge-danger">Заблокирован</span>'
                     : '<span class="badge badge-success">Активен</span>';
                 const regDate = new Date(user.created_at).toLocaleDateString('ru-RU');
-                
+
                 return `
                     <tr>
                         <td>${user.id}</td>
@@ -1046,7 +1067,7 @@
                 const data = await apiCall(`/api/admin/user/${userId}`);
                 if (data.success) {
                     const { user, generations, transactions, referrals } = data.user;
-                    
+
                     content.innerHTML = `
                         <div class="modal-section">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
@@ -1120,14 +1141,14 @@
 
                         <div class="modal-section">
                             <h3>Генерации (${generations.length})</h3>
-                            ${generations.length === 0 
-                                ? '<div class="empty-state"><h3>Нет генераций</h3></div>'
-                                : generations.slice(0, 10).map(gen => {
-                                    const hasImage = gen.image_data;
-                                    const imageHtml = hasImage 
-                                        ? `<div style="margin-top: 10px;"><img src="data:image/png;base64,${gen.image_data}" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${gen.image_data}')" title="Нажмите для увеличения"></div>`
-                                        : '';
-                                    return `
+                            ${generations.length === 0
+                            ? '<div class="empty-state"><h3>Нет генераций</h3></div>'
+                            : generations.slice(0, 10).map(gen => {
+                                const hasImage = gen.image_data;
+                                const imageHtml = hasImage
+                                    ? `<div style="margin-top: 10px;"><img src="data:image/png;base64,${gen.image_data}" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${gen.image_data}')" title="Нажмите для увеличения"></div>`
+                                    : '';
+                                return `
                                     <div class="history-item">
                                         <div class="header">
                                             <span class="badge badge-info">${gen.type || 'text'}</span>
@@ -1140,15 +1161,15 @@
                                         </div>
                                     </div>
                                 `;
-                                }).join('')
-                            }
+                            }).join('')
+                        }
                         </div>
 
                         <div class="modal-section">
                             <h3>Транзакции (${transactions.length})</h3>
-                            ${transactions.length === 0 
-                                ? '<div class="empty-state"><h3>Нет транзакций</h3></div>'
-                                : transactions.slice(0, 10).map(tx => `
+                            ${transactions.length === 0
+                            ? '<div class="empty-state"><h3>Нет транзакций</h3></div>'
+                            : transactions.slice(0, 10).map(tx => `
                                     <div class="history-item">
                                         <div class="header">
                                             <span class="badge ${tx.amount > 0 ? 'badge-success' : 'badge-danger'}">${tx.type}</span>
@@ -1161,7 +1182,7 @@
                                         </div>
                                     </div>
                                 `).join('')
-                            }
+                        }
                         </div>
 
                         ${referrals.length > 0 ? `
@@ -1193,7 +1214,7 @@
         }
 
         // Close modal on outside click
-        window.onclick = function(event) {
+        window.onclick = function (event) {
             const modal = document.getElementById('userModal');
             const sendModal = document.getElementById('sendMessageModal');
             const imageModal = document.getElementById('imageModal');
@@ -1340,7 +1361,7 @@
             // Проверяем конфликтующие фильтры
             const onlyActive = document.getElementById('filterOnlyActive').checked;
             const onlyBlocked = document.getElementById('filterOnlyBlocked').checked;
-            
+
             if (onlyActive && onlyBlocked) {
                 errorDiv.textContent = 'Нельзя выбрать одновременно "только активные" и "только заблокированные"';
                 errorDiv.style.display = 'block';
@@ -1356,16 +1377,16 @@
             errorDiv.style.display = 'none';
             progressDiv.style.display = 'block';
             resultsDiv.style.display = 'none';
-            
+
             // Собираем фильтры
             const filters = {
                 onlyActive: onlyActive,
                 onlyBlocked: onlyBlocked
             };
-            
+
             const minCredits = document.getElementById('filterMinCredits').value.trim();
             const maxCredits = document.getElementById('filterMaxCredits').value.trim();
-            
+
             if (minCredits) {
                 filters.minCredits = parseInt(minCredits);
             }
@@ -1396,13 +1417,13 @@
 
                 if (data.success) {
                     const { results } = data;
-                    
+
                     // Обновляем прогресс
                     const percentage = (results.sent / results.total) * 100;
                     progressBar.style.width = percentage + '%';
                     progressBar.textContent = Math.round(percentage) + '%';
                     progressText.textContent = `${results.sent} / ${results.total} отправлено`;
-                    
+
                     // Показываем результаты
                     resultsDiv.style.display = 'block';
                     let resultsHtml = `
@@ -1421,7 +1442,7 @@
                             </div>
                         </div>
                     `;
-                    
+
                     if (results.errors && results.errors.length > 0) {
                         resultsHtml += `
                             <div style="margin-top: 15px;">
@@ -1436,9 +1457,9 @@
                             </div>
                         `;
                     }
-                    
+
                     resultsText.innerHTML = resultsHtml;
-                    
+
                     alert(`✅ Рассылка завершена!\n\nОтправлено: ${results.sent}\nОшибок: ${results.failed}\nВсего: ${results.total}`);
                 } else {
                     errorDiv.textContent = data.error || 'Ошибка массовой рассылки';
@@ -1459,7 +1480,7 @@
         function switchTab(tab) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
+
             if (tab === 'users') {
                 document.querySelector('.tab-btn[onclick="switchTab(\'users\')"]').classList.add('active');
                 document.getElementById('usersTab').classList.add('active');
@@ -1487,7 +1508,7 @@
                 const data = await apiCall('/api/admin/content');
                 if (data.success) {
                     const content = data.content;
-                    
+
                     if (content.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет контента</h3></td></tr>';
                         return;
@@ -1495,11 +1516,11 @@
 
                     tbody.innerHTML = content.map(item => {
                         const hasImage = item.image_data ? '✅' : '❌';
-                        const status = item.is_active === 1 
+                        const status = item.is_active === 1
                             ? '<span class="badge badge-success">Активен</span>'
                             : '<span class="badge badge-danger">Неактивен</span>';
                         const textPreview = item.text ? (item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text) : '-';
-                        
+
                         return `
                             <tr>
                                 <td>${item.id}</td>
@@ -1526,7 +1547,7 @@
             currentContentType = type;
             currentContentId = null;
             currentContentImageBase64 = null;
-            
+
             const editor = document.getElementById('contentEditor');
             const title = document.getElementById('contentEditorTitle');
             const typeNames = {
@@ -1534,10 +1555,10 @@
                 'menu': 'Меню',
                 'examples': 'Примеры генераций'
             };
-            
+
             title.textContent = `Редактирование: ${typeNames[type] || type}`;
             editor.style.display = 'block';
-            
+
             // Очищаем форму
             document.getElementById('contentTitle').value = '';
             document.getElementById('contentText').value = '';
@@ -1546,7 +1567,7 @@
             document.getElementById('contentOrder').value = 0;
             document.getElementById('contentImagePreview').style.display = 'none';
             document.getElementById('contentError').style.display = 'none';
-            
+
             // Загружаем существующий контент
             loadContentByType(type);
         }
@@ -1561,7 +1582,7 @@
                     document.getElementById('contentText').value = item.text || '';
                     document.getElementById('contentActive').checked = item.is_active === 1;
                     document.getElementById('contentOrder').value = item.order_index || 0;
-                    
+
                     if (item.image_data) {
                         currentContentImageBase64 = item.image_data;
                         document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
@@ -1574,11 +1595,11 @@
         }
 
         // Обработка загрузки изображения
-        document.getElementById('contentImage').addEventListener('change', function(e) {
+        document.getElementById('contentImage').addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function(event) {
+                reader.onload = function (event) {
                     const base64 = event.target.result.split(',')[1]; // Убираем data:image/...;base64,
                     currentContentImageBase64 = base64;
                     document.getElementById('contentImagePreviewImg').src = event.target.result;
@@ -1608,7 +1629,7 @@
                         currentContentType = item.type;
                         currentContentId = item.id;
                         currentContentImageBase64 = item.image_data || null;
-                        
+
                         const editor = document.getElementById('contentEditor');
                         const title = document.getElementById('contentEditorTitle');
                         const typeNames = {
@@ -1616,15 +1637,15 @@
                             'menu': 'Меню',
                             'examples': 'Примеры генераций'
                         };
-                        
+
                         title.textContent = `Редактирование: ${typeNames[item.type] || item.type}`;
                         editor.style.display = 'block';
-                        
+
                         document.getElementById('contentTitle').value = item.title || '';
                         document.getElementById('contentText').value = item.text || '';
                         document.getElementById('contentActive').checked = item.is_active === 1;
                         document.getElementById('contentOrder').value = item.order_index || 0;
-                        
+
                         if (item.image_data) {
                             document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
                             document.getElementById('contentImagePreview').style.display = 'block';
@@ -1736,14 +1757,14 @@
                 const data = await apiCall('/api/admin/requests?limit=200');
                 if (data.success) {
                     const requests = data.requests;
-                    
+
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет запросов</h3></td></tr>';
                         return;
                     }
 
                     tbody.innerHTML = requests.map(req => {
-                        const userInfo = req.username 
+                        const userInfo = req.username
                             ? `${req.username} (ID: ${req.user_id})`
                             : `ID: ${req.user_id} ${req.telegram_id ? '(Telegram)' : '(Web)'}`;
                         const promptPreview = req.prompt ? (req.prompt.length > 100 ? req.prompt.substring(0, 100) + '...' : req.prompt) : '-';
@@ -1754,11 +1775,11 @@
                         } else if (req.type === 'image_edit') {
                             typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
                         }
-                        
-                        const imagePreview = req.image_data 
+
+                        const imagePreview = req.image_data
                             ? `<img src="data:image/png;base64,${req.image_data}" style="max-width: 150px; max-height: 150px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${req.image_data}')" title="Нажмите для увеличения">`
                             : '-';
-                        
+
                         return `
                             <tr>
                                 <td>${req.id}</td>
@@ -1856,5 +1877,5 @@
         }
     </script>
 </body>
-</html>
 
+</html>

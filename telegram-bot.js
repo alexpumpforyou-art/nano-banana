@@ -519,8 +519,12 @@ bot.onText(/\/stats/, async (msg) => {
 
     // Общая статистика транзакций
     const totalPurchases = await db.knex('transactions')
-      .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(amount) as total_stars"))
-      .where('type', 'purchase')
+      .select(
+        db.knex.raw('COUNT(*) as count'),
+        db.knex.raw("SUM(CASE WHEN type = 'payment' THEN price ELSE 0 END) as total_stars"),
+        db.knex.raw("SUM(CASE WHEN type = 'purchase_yookassa' THEN price ELSE 0 END) as total_rub_received")
+      )
+      .whereIn('type', ['payment', 'purchase_yookassa'])
       .first();
 
     // Общая статистика генераций
@@ -556,7 +560,8 @@ bot.onText(/\/stats/, async (msg) => {
 
     statsText += `💰 *Продажи:*\n`;
     statsText += `└ Всего покупок: ${totalPurchases.count || 0}\n`;
-    statsText += `└ Заработано: ${totalPurchases.total_stars || 0} ⭐\n`;
+    statsText += `└ Заработано Stars: ${totalPurchases.total_stars || 0} ⭐\n`;
+    statsText += `└ Заработано RUB: ${(totalPurchases.total_rub_received || 0).toLocaleString('ru-RU')} ₽\n`;
     statsText += `└ Средний чек: ${avgPurchase} ⭐\n\n`;
 
     statsText += `🤖 *Генерации:*\n`;
@@ -573,7 +578,9 @@ bot.onText(/\/stats/, async (msg) => {
     }
 
     // Расчет примерного дохода
-    const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01; // $0.01 за Star
+    const starsRevenue = (totalPurchases.total_stars || 0) * 0.01; // $0.01 за Star
+    const rubRevenue = (totalPurchases.total_rub_received || 0) / 100; // Примерно 100 RUB = $1 (грубо)
+    const estimatedRevenue = starsRevenue + rubRevenue;
     const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15; // кредиты * 50 = токены, примерная стоимость API
     const estimatedProfit = estimatedRevenue - estimatedCost;
 
@@ -1291,8 +1298,12 @@ _Пример: "Убеди фон"_
 
       const totalUsers = await db.knex('users').count('* as count').first();
       const totalPurchases = await db.knex('transactions')
-        .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(amount) as total_stars"))
-        .where('type', 'purchase')
+        .select(
+          db.knex.raw('COUNT(*) as count'),
+          db.knex.raw("SUM(CASE WHEN type = 'payment' THEN price ELSE 0 END) as total_stars"),
+          db.knex.raw("SUM(CASE WHEN type = 'purchase_yookassa' THEN price ELSE 0 END) as total_rub_received")
+        )
+        .whereIn('type', ['payment', 'purchase_yookassa'])
         .first();
       const totalGenerations = await db.knex('generations')
         .select(db.knex.raw('COUNT(*) as count'), db.knex.raw("SUM(cost) as total_credits"))
@@ -1303,7 +1314,11 @@ _Пример: "Убеди фон"_
         .first();
 
       const avgPurchase = totalPurchases.total_stars && totalPurchases.count ? (totalPurchases.total_stars / totalPurchases.count).toFixed(1) : 0;
-      const estimatedRevenue = (totalPurchases.total_stars || 0) * 0.01;
+
+      const starsRevenue = (totalPurchases.total_stars || 0) * 0.01;
+      const rubRevenue = (totalPurchases.total_rub_received || 0) / 100;
+      const estimatedRevenue = starsRevenue + rubRevenue;
+
       const estimatedCost = ((totalGenerations.total_credits || 0) * 50 / 1000000) * 0.15;
       const estimatedProfit = estimatedRevenue - estimatedCost;
 
@@ -1311,7 +1326,8 @@ _Пример: "Убеди фон"_
       statsText += `👥 Пользователей: ${totalUsers.count}\n\n`;
       statsText += `💰 *Продажи:*\n`;
       statsText += `└ Покупок: ${totalPurchases.count || 0}\n`;
-      statsText += `└ Заработано: ${totalPurchases.total_stars || 0} ⭐\n`;
+      statsText += `└ Заработано Stars: ${totalPurchases.total_stars || 0} ⭐\n`;
+      statsText += `└ Заработано RUB: ${(totalPurchases.total_rub_received || 0).toLocaleString('ru-RU')} ₽\n`;
       statsText += `└ Средний чек: ${avgPurchase} ⭐\n\n`;
       statsText += `🤖 *Генерации:*\n`;
       statsText += `└ Всего: ${totalGenerations.count || 0}\n`;

@@ -39,36 +39,36 @@ function initDatabase() {
       FOREIGN KEY (referred_by) REFERENCES users(id)
     )
   `);
-  
+
   // Миграция: добавляем новые колонки если их нет
   try {
     db.exec(`ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN total_generations INTEGER DEFAULT 0`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN total_spent_credits INTEGER DEFAULT 0`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT UNIQUE`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN referral_bonus_earned INTEGER DEFAULT 0`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   try {
     db.exec(`ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   // Мигрируем старые tokens в credits (деноминация: 50 токенов = 1 кредит)
   try {
     const usersWithTokens = db.prepare(`SELECT id, tokens FROM users WHERE tokens > 0 AND (credits IS NULL OR credits = 0)`).all();
@@ -113,12 +113,12 @@ function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
-  
+
   // Миграция: добавляем колонку image_data если её нет
   try {
     db.exec(`ALTER TABLE generations ADD COLUMN image_data TEXT`);
   } catch (e) { /* колонка уже существует */ }
-  
+
   // Таблица рефералов (для детальной статистики)
   db.exec(`
     CREATE TABLE IF NOT EXISTS referrals (
@@ -146,13 +146,13 @@ function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  
+
   // Создаем индексы для быстрого поиска
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_content_type ON content(type)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_content_active ON content(is_active)`);
   } catch (e) { /* индексы уже существуют */ }
-  
+
   // Инициализируем дефолтный контент если его нет
   try {
     const existingWelcome = db.prepare('SELECT COUNT(*) as count FROM content WHERE type = ?').get('welcome');
@@ -162,7 +162,7 @@ function initDatabase() {
         VALUES ('welcome', 'Приветствие', '🍌 Добро пожаловать в Nano Banana!\n\n💎 Ваш баланс: *{credits} кредитов*\n📊 Генераций: {generations}\n\n📝 Отправьте мне текст для генерации или выберите действие:', 0, 1)
       `).run();
     }
-    
+
     const existingMenu = db.prepare('SELECT COUNT(*) as count FROM content WHERE type = ?').get('menu');
     if (existingMenu.count === 0) {
       db.prepare(`
@@ -211,28 +211,28 @@ const userQueries = {
 
   // Получить пользователя по Web ID
   getByWebId: db.prepare('SELECT * FROM users WHERE web_id = ?'),
-  
+
   // Получить пользователя по реферальному коду
   getByReferralCode: db.prepare('SELECT * FROM users WHERE referral_code = ?'),
 
   // Обновить баланс кредитов
   updateCredits: db.prepare('UPDATE users SET credits = credits + ? WHERE id = ?'),
-  
+
   // Увеличить счетчик генераций
   incrementGenerations: db.prepare('UPDATE users SET total_generations = total_generations + 1, total_spent_credits = total_spent_credits + ? WHERE id = ?'),
-  
+
   // Установить реферера
   setReferrer: db.prepare('UPDATE users SET referred_by = ? WHERE id = ?'),
-  
+
   // Начислить реферальный бонус
   addReferralBonus: db.prepare('UPDATE users SET referral_bonus_earned = referral_bonus_earned + ?, credits = credits + ? WHERE id = ?'),
-  
+
   // Заблокировать/разблокировать пользователя
   setBlocked: db.prepare('UPDATE users SET is_blocked = ? WHERE id = ?'),
 
   // Проверить баланс
   getBalance: db.prepare('SELECT credits FROM users WHERE id = ?'),
-  
+
   // Получить статистику рефералов
   getReferrals: db.prepare(`
     SELECT u.id, u.username, u.telegram_id, u.created_at, u.total_generations
@@ -240,10 +240,10 @@ const userQueries = {
     WHERE u.referred_by = ?
     ORDER BY u.created_at DESC
   `),
-  
+
   // Подсчитать количество рефералов
   countReferrals: db.prepare('SELECT COUNT(*) as count FROM users WHERE referred_by = ?'),
-  
+
   // АДМИН-ПАНЕЛЬ: Получить всех пользователей
   getAllUsers: db.prepare(`
     SELECT 
@@ -254,10 +254,10 @@ const userQueries = {
     FROM users
     ORDER BY created_at DESC
   `),
-  
+
   // АДМИН-ПАНЕЛЬ: Получить пользователя по ID с детальной статистикой
   getAdminUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
-  
+
   // АДМИН-ПАНЕЛЬ: Подсчитать общую статистику
   getTotalStats: db.prepare(`
     SELECT 
@@ -286,19 +286,20 @@ const transactionQueries = {
     ORDER BY created_at DESC
     LIMIT ?
   `),
-  
+
   // АДМИН-ПАНЕЛЬ: Получить все транзакции пользователя
   getAllByUserId: db.prepare(`
     SELECT * FROM transactions
     WHERE user_id = ?
     ORDER BY created_at DESC
   `),
-  
+
   // АДМИН-ПАНЕЛЬ: Подсчитать общую статистику транзакций
   getTotalStats: db.prepare(`
     SELECT 
       COUNT(*) as total_transactions,
       SUM(CASE WHEN type = 'payment' THEN stars_paid ELSE 0 END) as total_stars_received,
+      SUM(CASE WHEN type = 'purchase_yookassa' THEN stars_paid ELSE 0 END) as total_rub_received,
       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_credits_added,
       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_credits_spent
     FROM transactions
@@ -319,7 +320,7 @@ const generationQueries = {
     ORDER BY created_at DESC
     LIMIT ?
   `),
-  
+
   // АДМИН-ПАНЕЛЬ: Получить все генерации пользователя
   getAllByUserId: db.prepare(`
     SELECT id, prompt, SUBSTR(response, 1, 200) as response_preview, credits_used, type, image_data, created_at
@@ -327,7 +328,7 @@ const generationQueries = {
     WHERE user_id = ?
     ORDER BY created_at DESC
   `),
-  
+
   // АДМИН-ПАНЕЛЬ: Подсчитать генерации по типам
   countByType: db.prepare(`
     SELECT type, COUNT(*) as count, SUM(credits_used) as total_credits
@@ -342,11 +343,11 @@ const referralQueries = {
     INSERT INTO referrals (referrer_id, referred_id, bonus_earned)
     VALUES (?, ?, ?)
   `),
-  
+
   getByReferrer: db.prepare(`
     SELECT * FROM referrals WHERE referrer_id = ? ORDER BY created_at DESC
   `),
-  
+
   getTotalBonus: db.prepare(`
     SELECT SUM(bonus_earned) as total FROM referrals WHERE referrer_id = ?
   `),
@@ -361,36 +362,36 @@ const contentQueries = {
     ORDER BY order_index ASC, created_at ASC 
     LIMIT 1
   `),
-  
+
   // Получить все контенты по типу (для админ-панели)
   getAllByType: db.prepare(`
     SELECT * FROM content 
     WHERE type = ? 
     ORDER BY order_index ASC, created_at DESC
   `),
-  
+
   // Получить все контенты
   getAll: db.prepare(`
     SELECT * FROM content 
     ORDER BY type ASC, order_index ASC, created_at DESC
   `),
-  
+
   // Получить контент по ID
   getById: db.prepare('SELECT * FROM content WHERE id = ?'),
-  
+
   // Создать контент
   create: db.prepare(`
     INSERT INTO content (type, title, text, image_data, order_index, is_active)
     VALUES (?, ?, ?, ?, ?, ?)
   `),
-  
+
   // Обновить контент
   update: db.prepare(`
     UPDATE content 
     SET title = ?, text = ?, image_data = ?, order_index = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `),
-  
+
   // Удалить контент
   delete: db.prepare('DELETE FROM content WHERE id = ?'),
 };

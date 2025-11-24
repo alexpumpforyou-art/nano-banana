@@ -604,9 +604,9 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
 // ==================== УПРАВЛЕНИЕ КОНТЕНТОМ ====================
 
 // Получить весь контент (для админ-панели)
-app.get('/api/admin/content', requireAdmin, (req, res) => {
+app.get('/api/admin/content', requireAdmin, async (req, res) => {
   try {
-    const content = contentQueries.getAll.all();
+    const content = await contentQueries.getAll();
     res.json({
       success: true,
       content
@@ -618,10 +618,10 @@ app.get('/api/admin/content', requireAdmin, (req, res) => {
 });
 
 // Получить контент по типу
-app.get('/api/admin/content/:type', requireAdmin, (req, res) => {
+app.get('/api/admin/content/:type', requireAdmin, async (req, res) => {
   try {
     const { type } = req.params;
-    const content = contentQueries.getAllByType.all(type);
+    const content = await contentQueries.getAllByType(type);
     res.json({
       success: true,
       content
@@ -633,7 +633,7 @@ app.get('/api/admin/content/:type', requireAdmin, (req, res) => {
 });
 
 // Создать или обновить контент
-app.post('/api/admin/content', requireAdmin, (req, res) => {
+app.post('/api/admin/content', requireAdmin, async (req, res) => {
   try {
     const { id, type, title, text, image_data, order_index, is_active } = req.body;
 
@@ -643,7 +643,7 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
 
     if (id) {
       // Обновление существующего контента
-      contentQueries.update.run(
+      const updated = await contentQueries.update(
         title || null,
         text || null,
         image_data || null,
@@ -652,7 +652,6 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
         id
       );
 
-      const updated = contentQueries.getById.get(id);
       res.json({
         success: true,
         message: 'Контент обновлен',
@@ -660,7 +659,7 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
       });
     } else {
       // Создание нового контента
-      const result = contentQueries.create.run(
+      const created = await contentQueries.create(
         type,
         title || null,
         text || null,
@@ -669,7 +668,6 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
         is_active !== undefined ? (is_active ? 1 : 0) : 1
       );
 
-      const created = contentQueries.getById.get(result.lastInsertRowid);
       res.json({
         success: true,
         message: 'Контент создан',
@@ -683,10 +681,10 @@ app.post('/api/admin/content', requireAdmin, (req, res) => {
 });
 
 // Удалить контент
-app.delete('/api/admin/content/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/content/:id', requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    contentQueries.delete.run(id);
+    await contentQueries.delete(id);
     res.json({
       success: true,
       message: 'Контент удален'

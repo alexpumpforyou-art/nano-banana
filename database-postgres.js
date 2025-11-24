@@ -192,7 +192,8 @@ const transactionQueries = {
         return knex('transactions')
             .select(
                 knex.raw('COUNT(*) as total_transactions'),
-                knex.raw("SUM(CASE WHEN type = 'purchase' THEN price ELSE 0 END) as total_revenue")
+                knex.raw("SUM(CASE WHEN type = 'purchase' THEN price ELSE 0 END) as total_stars_received"),
+                knex.raw("SUM(CASE WHEN type = 'purchase_yookassa' THEN price ELSE 0 END) as total_rub_received")
             )
             .first();
     }
@@ -258,12 +259,51 @@ const referralQueries = {
 };
 
 const contentQueries = {
+    async getAll() {
+        return knex('content').orderBy('order_index', 'asc');
+    },
+
+    async getAllByType(type) {
+        return knex('content').where('type', type).orderBy('order_index', 'asc');
+    },
+
     async getByType(type) {
-        // Assuming content table exists or will be created. 
-        // If not in migration, need to add it. 
-        // For now, let's assume it exists as per SQLite schema.
-        // Note: I didn't add 'content' table to initial migration. I should fix that.
-        return null;
+        return knex('content').where('type', type).orderBy('order_index', 'asc').first();
+    },
+
+    async getById(id) {
+        return knex('content').where('id', id).first();
+    },
+
+    async create(type, title, text, image_data, order_index, is_active) {
+        const [created] = await knex('content').insert({
+            type,
+            title,
+            text,
+            image_data,
+            order_index,
+            is_active: is_active ? 1 : 0
+        }).returning('*');
+        return created;
+    },
+
+    async update(title, text, image_data, order_index, is_active, id) {
+        const [updated] = await knex('content')
+            .where('id', id)
+            .update({
+                title,
+                text,
+                image_data,
+                order_index,
+                is_active: is_active ? 1 : 0,
+                updated_at: knex.fn.now()
+            })
+            .returning('*');
+        return updated;
+    },
+
+    async delete(id) {
+        return knex('content').where('id', id).del();
     }
 };
 
