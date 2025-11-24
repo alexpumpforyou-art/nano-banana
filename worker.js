@@ -22,12 +22,14 @@ const worker = new Worker('image-generation', async job => {
         // 1. Генерируем изображение
         const result = await imageService.generateImage(prompt);
 
-        // 2. Списываем кредиты (если успешно)
-        await userQueries.updateCredits(-result.tokensUsed, userId);
+        // 2. Списываем кредиты (фиксированная цена)
+        const creditsCost = 2; // PRICES.IMAGE_GEN
+        await userQueries.updateCredits(-creditsCost, userId);
 
         // 3. Сохраняем в БД
-        await generationQueries.create(userId, prompt, 'image', result.tokensUsed);
-        await transactionQueries.create(userId, 'generation', -result.tokensUsed, 0, 'Генерация изображения');
+        const base64Image = result.imageBuffer.toString('base64');
+        await generationQueries.create(userId, prompt, '[Изображение]', creditsCost, 'image', base64Image);
+        await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Генерация изображения');
 
         // 4. Отправляем пользователю
         await bot.sendPhoto(chatId, result.imageBuffer, {
