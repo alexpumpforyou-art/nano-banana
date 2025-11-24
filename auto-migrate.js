@@ -1,6 +1,19 @@
+#!/usr/bin/env node
 require('dotenv').config();
+
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
+
+console.log('🔍 Checking migration status...');
+
+// Only migrate if DATABASE_URL is set (Railway environment)
+if (!process.env.DATABASE_URL) {
+    console.log('⚠️  DATABASE_URL not found - skipping auto-migration (local development)');
+    process.exit(0);
+}
+
+console.log('✅ DATABASE_URL found - proceeding with migration');
 
 // Create knex instance with SSL for Railway
 const knex = require('knex')({
@@ -13,23 +26,31 @@ const knex = require('knex')({
 const dbPath = path.join(__dirname, 'nano_banana.db');
 
 // Check if SQLite database exists
-const fs = require('fs');
 if (!fs.existsSync(dbPath)) {
-    console.error('❌ SQLite database not found at:', dbPath);
-    process.exit(1);
+    console.log('ℹ️  SQLite database not found - skipping data migration');
+    knex.destroy();
+    process.exit(0);
 }
 
-const sqlite = new Database(dbPath);
+const sqlite = new Database(dbPath, { readonly: true });
 
-async function migrateData() {
-    console.log('🚀 Starting migration from SQLite to PostgreSQL...');
+async function autoMigrate() {
+    console.log('🚀 Starting auto-migration from SQLite to PostgreSQL...');
 
     try {
+        // Check if already migrated (check if users exist)
+        const existingUsers = await knex('users').count('* as count').first();
+        if (existingUsers && parseInt(existingUsers.count) > 0) {
+            console.log(`ℹ️  Database already has ${existingUsers.count} users - skipping migration`);
+            await knex.destroy();
+            sqlite.close();
+            return;
+        }
+
         // 1. Users
         console.log('👤 Migrating users...');
         const users = sqlite.prepare('SELECT * FROM users').all();
         for (const user of users) {
-            // Check if exists
             const existing = await knex('users').where('telegram_id', user.telegram_id).first();
             if (!existing) {
                 await knex('users').insert({
@@ -37,6 +58,7 @@ async function migrateData() {
                     username: user.username,
                     credits: user.credits,
                     generations_count: user.total_generations,
+                    total_spent_credits: user.total_spent_credits || 0,
                     is_blocked: user.is_blocked === 1,
                     created_at: new Date(user.created_at),
                     last_activity: new Date(user.last_used)
@@ -49,7 +71,6 @@ async function migrateData() {
         console.log('💰 Migrating transactions...');
         const transactions = sqlite.prepare('SELECT * FROM transactions').all();
         for (const tx of transactions) {
-            // Find PG user id
             const sqliteUser = users.find(u => u.id === tx.user_id);
             if (sqliteUser) {
                 const pgUser = await knex('users').where('telegram_id', sqliteUser.telegram_id).first();
@@ -89,13 +110,19 @@ async function migrateData() {
         }
         console.log(`✅ Migrated ${generations.length} generations.`);
 
-        console.log('🎉 Migration completed successfully!');
+        console.log('🎉 Auto-migration completed successfully!');
     } catch (error) {
-        console.error('❌ Migration failed:', error);
+        console.error('❌ Auto-migration failed:', error);
+        throw error;
     } finally {
         await knex.destroy();
         sqlite.close();
     }
 }
 
-migrateData();
+autoMigrate()
+    .then(() => process.exit(0))
+    .catch(err => {
+        console.error(err);
+        process.exit(1);
+    });
