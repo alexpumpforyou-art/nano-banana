@@ -1951,37 +1951,46 @@ bot.on('message', async (msg) => {
       }
     } else {
       // Обычная генерация текста
-      await bot.sendChatAction(chatId, 'typing');
+      const statusMsg = new StatusMessage(bot, chatId);
+      await statusMsg.start('🤔 Думаю');
 
-      const result = await gemini.generate(prompt);
+      try {
+        const result = await gemini.generate(prompt);
 
-      // Определяем стоимость на основе длины ответа
-      const responseLength = result.text.length;
-      const creditsUsed = responseLength > 500 ? PRICES.TEXT_LONG : PRICES.TEXT_SHORT;
+        // Определяем стоимость на основе длины ответа
+        const responseLength = result.text.length;
+        const creditsUsed = responseLength > 500 ? PRICES.TEXT_LONG : PRICES.TEXT_SHORT;
 
-      // Проверяем, хватит ли кредитов
-      if (user.credits < creditsUsed) {
-        return await bot.sendMessage(
+        // Проверяем, хватит ли кредитов
+        if (user.credits < creditsUsed) {
+          await statusMsg.stop();
+          return await bot.sendMessage(
+            chatId,
+            `❌ Недостаточно кредитов для этого запроса.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
+          );
+        }
+
+        // Списываем кредиты
+        await userQueries.updateCredits(-creditsUsed, user.id);
+        await userQueries.incrementGenerations(creditsUsed, user.id);
+
+        await generationQueries.create(user.id, prompt, result.text, creditsUsed, 'text', null);
+        await transactionQueries.create(user.id, 'generation', -creditsUsed, 0, 'Генерация текста');
+
+        const newBalance = user.credits - creditsUsed;
+
+        await statusMsg.stop();
+
+        // Отправляем ответ (используем sendSmartMessage для длинных текстов)
+        const footer = `\n\n---\n💎 Использовано: ${creditsUsed} ${creditsUsed === 1 ? 'кредит' : 'кредита/кредитов'}\n💎 Осталось: ${newBalance}`;
+        await sendSmartMessage(
           chatId,
-          `❌ Недостаточно кредитов для этого запроса.\n\nТребуется: ${creditsUsed}\nДоступно: ${user.credits}\n\nИспользуйте /buy`
+          result.text + footer
         );
+      } catch (e) {
+        await statusMsg.stop();
+        throw e;
       }
-
-      // Списываем кредиты
-      await userQueries.updateCredits(-creditsUsed, user.id);
-      await userQueries.incrementGenerations(creditsUsed, user.id);
-
-      await generationQueries.create(user.id, prompt, result.text, creditsUsed, 'text', null);
-      await transactionQueries.create(user.id, 'generation', -creditsUsed, 0, 'Генерация текста');
-
-      const newBalance = user.credits - creditsUsed;
-
-      // Отправляем ответ (используем sendSmartMessage для длинных текстов)
-      const footer = `\n\n---\n💎 Использовано: ${creditsUsed} ${creditsUsed === 1 ? 'кредит' : 'кредита/кредитов'}\n💎 Осталось: ${newBalance}`;
-      await sendSmartMessage(
-        chatId,
-        result.text + footer
-      );
     }
 
   } catch (error) {
