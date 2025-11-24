@@ -33,7 +33,7 @@ const worker = new Worker('image-generation', async job => {
 
         // 4. Отправляем пользователю
         await bot.sendPhoto(chatId, result.imageBuffer, {
-            caption: `✨ Готово! (потрачено ${result.tokensUsed} кр.)`,
+            caption: `✨ Готово! (потрачено ${creditsCost} кр.)`,
             reply_to_message_id: messageId
         }, {
             filename: 'image.png',
