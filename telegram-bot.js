@@ -1932,41 +1932,19 @@ bot.on('message', async (msg) => {
           );
         }
 
-        const result = await imageService.generateImage(imagePrompt);
+        // Добавляем задачу в очередь
+        await generationQueue.add('generate-image', {
+          chatId,
+          prompt: imagePrompt,
+          userId: user.id,
+          messageId: msg.message_id
+        });
 
-        // Списываем кредиты
-        await userQueries.updateCredits(-creditsUsed, user.id);
-        await userQueries.incrementGenerations(creditsUsed, user.id);
+        console.log(`✅ Задача добавлена в очередь для пользователя ${user.id}`);
 
-        // Сохраняем генерацию с изображением в base64
-        const imageBase64 = result.imageBuffer.toString('base64');
-        await generationQueries.create(user.id, prompt, '[Изображение]', creditsUsed, 'image', imageBase64);
+        // Статус "Рисую" останется висеть, пока воркер не ответит
+        // Воркер сам отправит результат или ошибку
 
-        // Сохраняем транзакцию
-        await transactionQueries.create(
-          user.id,
-          'generation',
-          -creditsUsed,
-          0,
-          'Генерация изображения'
-        );
-
-        const newBalance = user.credits - creditsUsed;
-
-        await statusMsg.stop();
-
-        // Отправляем изображение
-        try {
-          await bot.sendPhoto(chatId, result.imageBuffer, {
-            caption: `🎨 Изображение сгенерировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
-          });
-        } catch (photoError) {
-          console.error('Ошибка отправки фото:', photoError);
-          await bot.sendMessage(
-            chatId,
-            `🎨 Изображение сгенерировано, но произошла ошибка при отправке.\n\nОшибка: ${photoError.message}\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
-          );
-        }
       } catch (e) {
         await statusMsg.stop();
         throw e;
