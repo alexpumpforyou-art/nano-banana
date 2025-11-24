@@ -907,7 +907,6 @@
             </div>
         </div>
     </div>
-
     <script>
         let sessionId = null;
         let allUsers = [];
@@ -980,6 +979,24 @@
         async function loadData() {
             try {
                 // Load stats
+                const statsData = await apiCall('/api/admin/stats');
+                if (statsData.success) {
+                    const { users, transactions, generations } = statsData.stats;
+                    document.getElementById('totalUsers').textContent = users.total_users || 0;
+                    document.getElementById('telegramUsers').textContent = users.telegram_users || 0;
+                    document.getElementById('totalGenerations').textContent = users.total_generations || 0;
+                    document.getElementById('totalSpent').textContent = users.total_spent_credits || 0;
+                    document.getElementById('blockedUsers').textContent = users.blocked_users || 0;
+                    document.getElementById('totalStars').textContent = (transactions.total_stars_received || 0) + ' ⭐';
+                    document.getElementById('totalRub').textContent = (transactions.total_rub_received || 0).toLocaleString('ru-RU') + ' ₽';
+                }
+
+                // Load users
+                const usersData = await apiCall('/api/admin/users');
+                if (usersData.success) {
+                    allUsers = usersData.users;
+                    renderUsers();
+                }
             } catch (error) {
                 console.error('Ошибка загрузки данных:', error);
             }
@@ -1041,7 +1058,7 @@
                             ${user.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
                         </td>
                     </tr>
-                `;
+            `;
             }).join('');
         }
 
@@ -1069,52 +1086,52 @@
                     const { user, generations, transactions, referrals } = data.user;
 
                     content.innerHTML = `
-                        <div class="modal-section">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                                <h3 style="margin: 0;">Основная информация</h3>
-                                <div style="display: flex; gap: 10px;">
-                                    <button class="btn btn-success" onclick="openAddCredits(${user.id}, '${(user.username || user.telegram_id || 'Пользователь').replace(/'/g, "\\'")}', ${user.credits || 0})">💰 Начислить кредиты</button>
-                                    ${user.telegram_id ? `<button class="btn btn-success" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</button>` : ''}
-                                </div>
+                <div class="modal-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                        <h3 style="margin: 0;">Основная информация</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-success" onclick="openAddCredits(${user.id}, '${(user.username || user.telegram_id || 'Пользователь').replace(/'/g, "\\'")}', ${user.credits || 0})">💰 Начислить кредиты</button>
+                        ${user.telegram_id ? `<button class="btn btn-success" onclick="openSendMessage(${user.id}, '${(user.username || user.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</button>` : ''}
+                    </div>
                             </div>
-                            <div class="info-grid">
-                                <div class="info-item">
-                                    <label>ID</label>
-                                    <div class="value">${user.id}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Username</label>
-                                    <div class="value">${user.username || '-'}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Telegram ID</label>
-                                    <div class="value">${user.telegram_id || '-'}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Web ID</label>
-                                    <div class="value">${user.web_id || '-'}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Кредиты</label>
-                                    <div class="value">${user.credits || 0}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Реферальный код</label>
-                                    <div class="value">${user.referral_code || '-'}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Статус</label>
-                                    <div class="value">${user.is_blocked === 1 ? 'Заблокирован' : 'Активен'}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Регистрация</label>
-                                    <div class="value">${new Date(user.created_at).toLocaleString('ru-RU')}</div>
-                                </div>
-                                <div class="info-item">
-                                    <label>Последняя активность</label>
-                                    <div class="value">${new Date(user.last_used).toLocaleString('ru-RU')}</div>
-                                </div>
-                            </div>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>ID</label>
+                        <div class="value">${user.id}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Username</label>
+                        <div class="value">${user.username || '-'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Telegram ID</label>
+                        <div class="value">${user.telegram_id || '-'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Web ID</label>
+                        <div class="value">${user.web_id || '-'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Кредиты</label>
+                        <div class="value">${user.credits || 0}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Реферальный код</label>
+                        <div class="value">${user.referral_code || '-'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Статус</label>
+                        <div class="value">${user.is_blocked === 1 ? 'Заблокирован' : 'Активен'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Регистрация</label>
+                        <div class="value">${new Date(user.created_at).toLocaleString('ru-RU')}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Последняя активность</label>
+                        <div class="value">${new Date(user.last_used).toLocaleString('ru-RU')}</div>
+                    </div>
+                </div>
                         </div>
 
                         <div class="modal-section">
@@ -1185,7 +1202,8 @@
                         }
                         </div>
 
-                        ${referrals.length > 0 ? `
+                        ${
+                referrals.length > 0 ? `
                             <div class="modal-section">
                                 <h3>Рефералы (${referrals.length})</h3>
                                 ${referrals.map(ref => `
@@ -1200,8 +1218,9 @@
                                     </div>
                                 `).join('')}
                             </div>
-                        ` : ''}
-                    `;
+                        ` : ''
+            }
+            `;
                 }
             } catch (error) {
                 content.innerHTML = `<div class="error-message">Ошибка загрузки данных: ${error.message}</div>`;
@@ -1416,7 +1435,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const { results } = data;
+                    const {results} = data;
 
                     // Обновляем прогресс
                     const percentage = (results.sent / results.total) * 100;
@@ -1427,21 +1446,21 @@
                     // Показываем результаты
                     resultsDiv.style.display = 'block';
                     let resultsHtml = `
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 10px;">
-                            <div style="padding: 15px; background: var(--success); color: white; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold;">${results.sent}</div>
-                                <div>Отправлено</div>
-                            </div>
-                            <div style="padding: 15px; background: var(--danger); color: white; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold;">${results.failed}</div>
-                                <div>Ошибок</div>
-                            </div>
-                            <div style="padding: 15px; background: var(--info); color: white; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 24px; font-weight: bold;">${results.total}</div>
-                                <div>Всего</div>
-                            </div>
-                        </div>
-                    `;
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 10px;">
+                    <div style="padding: 15px; background: var(--success); color: white; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold;">${results.sent}</div>
+                        <div>Отправлено</div>
+                    </div>
+                    <div style="padding: 15px; background: var(--danger); color: white; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold;">${results.failed}</div>
+                        <div>Ошибок</div>
+                    </div>
+                    <div style="padding: 15px; background: var(--info); color: white; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold;">${results.total}</div>
+                        <div>Всего</div>
+                    </div>
+                </div>
+                `;
 
                     if (results.errors && results.errors.length > 0) {
                         resultsHtml += `
@@ -1522,20 +1541,20 @@
                         const textPreview = item.text ? (item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text) : '-';
 
                         return `
-                            <tr>
-                                <td>${item.id}</td>
-                                <td><span class="badge badge-info">${item.type}</span></td>
-                                <td>${item.title || '-'}</td>
-                                <td style="max-width: 200px; word-wrap: break-word;">${textPreview}</td>
-                                <td>${hasImage}</td>
-                                <td>${item.order_index || 0}</td>
-                                <td>${status}</td>
-                                <td>
-                                    <span class="user-link" onclick="editContent(${item.id})">✏️ Редактировать</span>
-                                    | <span class="user-link" style="color: var(--danger);" onclick="deleteContent(${item.id})">🗑️ Удалить</span>
-                                </td>
-                            </tr>
-                        `;
+                <tr>
+                    <td>${item.id}</td>
+                    <td><span class="badge badge-info">${item.type}</span></td>
+                    <td>${item.title || '-'}</td>
+                    <td style="max-width: 200px; word-wrap: break-word;">${textPreview}</td>
+                    <td>${hasImage}</td>
+                    <td>${item.order_index || 0}</td>
+                    <td>${status}</td>
+                    <td>
+                        <span class="user-link" onclick="editContent(${item.id})">✏️ Редактировать</span>
+                        | <span class="user-link" style="color: var(--danger);" onclick="deleteContent(${item.id})">🗑️ Удалить</span>
+                    </td>
+                </tr>
+                `;
                     }).join('');
                 }
             } catch (error) {
@@ -1781,22 +1800,22 @@
                             : '-';
 
                         return `
-                            <tr>
-                                <td>${req.id}</td>
-                                <td>${userInfo}</td>
-                                <td style="max-width: 300px; word-wrap: break-word;">${promptPreview}</td>
-                                <td>${typeBadge}</td>
-                                <td>${req.credits_used || 0}</td>
-                                <td>${date}</td>
-                                <td>
-                                    ${imagePreview}
-                                </td>
-                                <td>
-                                    <span class="user-link" onclick="showUserDetails(${req.user_id})">👤 Профиль</span>
-                                    ${req.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${req.user_id}, '${(req.username || req.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
-                                </td>
-                            </tr>
-                        `;
+                    <tr>
+                        <td>${req.id}</td>
+                        <td>${userInfo}</td>
+                        <td style="max-width: 300px; word-wrap: break-word;">${promptPreview}</td>
+                        <td>${typeBadge}</td>
+                        <td>${req.credits_used || 0}</td>
+                        <td>${date}</td>
+                        <td>
+                            ${imagePreview}
+                        </td>
+                        <td>
+                            <span class="user-link" onclick="showUserDetails(${req.user_id})">👤 Профиль</span>
+                            ${req.telegram_id ? ` | <span class="user-link" style="color: var(--success);" onclick="openSendMessage(${req.user_id}, '${(req.username || req.telegram_id).replace(/'/g, "\\'")}')">✉️ Написать</span>` : ''}
+                        </td>
+                    </tr>
+                    `;
                     }).join('');
                 }
             } catch (error) {
