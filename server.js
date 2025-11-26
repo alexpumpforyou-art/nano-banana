@@ -406,7 +406,7 @@ app.get('/api/admin/user/:id', requireAdmin, async (req, res) => {
     res.json({
       success: true,
       user: {
-        ...user,
+        user,
         generations,
         transactions,
         referrals
