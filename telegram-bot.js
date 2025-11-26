@@ -1933,6 +1933,9 @@ bot.on('message', async (msg) => {
         }
 
         // Добавляем задачу в очередь
+        console.log(`🔍 [DEBUG] Добавляю задачу в очередь 'image-generation'...`);
+        console.log(`🔍 [DEBUG] Redis URL (Bot): ${process.env.REDIS_URL || 'default localhost'}`);
+
         await generationQueue.add('generate-image', {
           chatId,
           prompt: imagePrompt,
@@ -1940,7 +1943,7 @@ bot.on('message', async (msg) => {
           messageId: msg.message_id
         });
 
-        console.log(`✅ Задача добавлена в очередь для пользователя ${user.id}`);
+        console.log(`✅ [DEBUG] Задача успешно добавлена в очередь (Job ID будет присвоен BullMQ)`);
 
         // Статус "Рисую" останется висеть, пока воркер не ответит
         // Воркер сам отправит результат или ошибку

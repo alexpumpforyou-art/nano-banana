@@ -9,6 +9,11 @@ const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', 
     maxRetriesPerRequest: null
 });
 
+connection.on('connect', () => console.log('✅ [Worker] Redis connected'));
+connection.on('ready', () => console.log('✅ [Worker] Redis ready'));
+connection.on('error', (err) => console.error('❌ [Worker] Redis error:', err));
+console.log(`🔍 [Worker] Redis URL: ${process.env.REDIS_URL || 'default localhost'}`);
+
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
 
