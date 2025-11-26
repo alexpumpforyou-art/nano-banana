@@ -20,37 +20,79 @@ const imageService = new ImageService(process.env.GEMINI_API_KEY);
 console.log('🚀 Worker started. Waiting for jobs...');
 
 const worker = new Worker('image-generation', async job => {
-    const { chatId, prompt, userId, messageId } = job.data;
-    console.log(`Processing job ${job.id} for user ${userId}: ${prompt}`);
+    const { chatId, prompt, userId, messageId, fileId } = job.data;
+    console.log(`Processing job ${job.id} (${job.name}) for user ${userId}`);
 
     try {
-        // 1. Генерируем изображение
-        const result = await imageService.generateImage(prompt);
+        if (job.name === 'generate-image') {
+            // ==================== ГЕНЕРАЦИЯ ====================
+            console.log(`🎨 Generating image for prompt: ${prompt}`);
+            const result = await imageService.generateImage(prompt);
 
-        // 2. Списываем кредиты (фиксированная цена)
-        const creditsCost = 2; // PRICES.IMAGE_GEN
-        await userQueries.updateCredits(-creditsCost, userId);
+            // Списываем кредиты (фиксированная цена)
+            const creditsCost = 2; // PRICES.IMAGE_GEN
+            await userQueries.updateCredits(-creditsCost, userId);
 
-        // 3. Сохраняем в БД
-        const base64Image = result.imageBuffer.toString('base64');
-        await generationQueries.create(userId, prompt, '[Изображение]', creditsCost, 'image', base64Image);
-        await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Генерация изображения');
+            // Сохраняем в БД
+            const base64Image = result.imageBuffer.toString('base64');
+            await generationQueries.create(userId, prompt, '[Изображение]', creditsCost, 'image', base64Image);
+            await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Генерация изображения');
 
-        // 4. Отправляем пользователю
-        await bot.sendPhoto(chatId, result.imageBuffer, {
-            caption: `✨ Готово! (потрачено ${creditsCost} кр.)`,
-            reply_to_message_id: messageId
-        }, {
-            filename: 'image.png',
-            contentType: 'image/png'
-        });
+            // Отправляем пользователю
+            await bot.sendPhoto(chatId, result.imageBuffer, {
+                caption: `✨ Готово! (потрачено ${creditsCost} кр.)`,
+                reply_to_message_id: messageId
+            }, {
+                filename: 'image.png',
+                contentType: 'image/png'
+            });
+
+        } else if (job.name === 'edit-image') {
+            // ==================== РЕДАКТИРОВАНИЕ ====================
+            console.log(`✏️ Editing image with prompt: ${prompt}`);
+
+            // 1. Получаем ссылку на файл
+            const fileLink = await bot.getFileLink(fileId);
+
+            // 2. Скачиваем изображение
+            const https = require('https');
+            const imageBuffer = await new Promise((resolve, reject) => {
+                https.get(fileLink, (response) => {
+                    const chunks = [];
+                    response.on('data', chunk => chunks.push(chunk));
+                    response.on('end', () => resolve(Buffer.concat(chunks)));
+                }).on('error', reject);
+            });
+            console.log(`📥 Downloaded image (${imageBuffer.length} bytes)`);
+
+            // 3. Редактируем
+            const result = await imageService.editImage(imageBuffer, prompt);
+
+            // 4. Списываем кредиты
+            const creditsCost = 2; // PRICES.IMAGE_EDIT
+            await userQueries.updateCredits(-creditsCost, userId);
+
+            // 5. Сохраняем в БД
+            const base64Image = result.imageBuffer.toString('base64');
+            await generationQueries.create(userId, `[Редактирование] ${prompt}`, '[Изображение]', creditsCost, 'image_edit', base64Image);
+            await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Редактирование изображения');
+
+            // 6. Отправляем результат
+            await bot.sendPhoto(chatId, result.imageBuffer, {
+                caption: `✏️ Готово! (потрачено ${creditsCost} кр.)`,
+                reply_to_message_id: messageId
+            }, {
+                filename: 'edited_image.png',
+                contentType: 'image/png'
+            });
+        }
 
         console.log(`Job ${job.id} completed successfully`);
     } catch (error) {
         console.error(`Job ${job.id} failed:`, error);
 
         // Уведомляем об ошибке
-        await bot.sendMessage(chatId, `❌ Не удалось сгенерировать изображение: ${error.message}`, {
+        await bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
             reply_to_message_id: messageId
         });
 

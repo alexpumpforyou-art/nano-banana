@@ -1821,54 +1821,24 @@ bot.on('message', async (msg) => {
       const statusMsg = new StatusMessage(bot, chatId);
       await statusMsg.start('✏️ Вносим правки');
 
-      // Скачиваем фото (берём самое большое)
-      const photo = msg.photo[msg.photo.length - 1];
-      const fileLink = await bot.getFileLink(photo.file_id);
+      // Добавляем задачу в очередь
+      console.log(`🔍 [DEBUG] Добавляю задачу редактирования в очередь...`);
 
-      // Загружаем изображение
-      const https = require('https');
-      const imageBuffer = await new Promise((resolve, reject) => {
-        https.get(fileLink, (response) => {
-          const chunks = [];
-          response.on('data', chunk => chunks.push(chunk));
-          response.on('end', () => resolve(Buffer.concat(chunks)));
-        }).on('error', reject);
+      // Берем самое большое фото
+      const photo = msg.photo[msg.photo.length - 1];
+
+      await generationQueue.add('edit-image', {
+        chatId,
+        prompt,
+        userId: user.id,
+        messageId: msg.message_id,
+        fileId: photo.file_id
       });
 
-      console.log(`📥 Изображение загружено (${imageBuffer.length} bytes)`);
+      console.log(`✅ [DEBUG] Задача редактирования добавлена в очередь`);
 
-      // Редактируем изображение
-      const result = await imageService.editImage(imageBuffer, prompt);
-
-      const creditsUsed = PRICES.IMAGE_EDIT;
-
-      // Списываем кредиты
-      await userQueries.updateCredits(-creditsUsed, user.id);
-      await userQueries.incrementGenerations(creditsUsed, user.id);
-
-      // Сохраняем генерацию с изображением в base64
-      const imageBase64 = result.imageBuffer.toString('base64');
-      await generationQueries.create(user.id, `[Редактирование] ${prompt}`, '[Изображение]', creditsUsed, 'image_edit', imageBase64);
-      await transactionQueries.create(user.id, 'generation', -creditsUsed, 0, 'Редактирование изображения');
-
-      const newBalance = user.credits - creditsUsed;
-
-      await statusMsg.stop();
-
-      // Отправляем отредактированное изображение
-      try {
-        await bot.sendPhoto(chatId, result.imageBuffer, {
-          caption: `✏️ Изображение отредактировано!\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
-        });
-      } catch (photoError) {
-        console.error('Ошибка отправки фото:', photoError);
-        await bot.sendMessage(
-          chatId,
-          `✏️ Изображение отредактировано, но ошибка при отправке.\n\n💎 Использовано: ${creditsUsed} кредитов\n💎 Осталось: ${newBalance}`
-        );
-      }
-
-      return; // Выходим, обработка завершена
+      // Статус "Вносим правки" останется висеть, пока воркер не ответит
+      return;
 
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
