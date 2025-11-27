@@ -1954,13 +1954,14 @@ bot.on('message', async (msg) => {
           chatId,
           prompt: imagePrompt,
           userId: user.id,
-          messageId: msg.message_id
+          messageId: msg.message_id,
+          statusMessageId: statusMsg.messageId // Передаем ID статус-сообщения для удаления
         });
 
         console.log(`✅ [DEBUG] Задача успешно добавлена в очередь (Job ID будет присвоен BullMQ)`);
 
         // Статус "Рисую" останется висеть, пока воркер не ответит
-        // Воркер сам отправит результат или ошибку
+        // Воркер сам отправит результат или ошибку и удалит статус-сообщение
 
       } catch (e) {
         await statusMsg.stop();

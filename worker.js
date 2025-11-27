@@ -20,7 +20,7 @@ const imageService = new ImageService(process.env.GEMINI_API_KEY);
 console.log('🚀 Worker started. Waiting for jobs...');
 
 const worker = new Worker('image-generation', async job => {
-    const { chatId, prompt, userId, messageId, fileId } = job.data;
+    const { chatId, prompt, userId, messageId, fileId, statusMessageId } = job.data;
     console.log(`Processing job ${job.id} (${job.name}) for user ${userId}`);
 
     try {
@@ -46,6 +46,15 @@ const worker = new Worker('image-generation', async job => {
                 filename: 'image.png',
                 contentType: 'image/png'
             });
+
+            // Удаляем сообщение "Рисую..."
+            if (statusMessageId) {
+                try {
+                    await bot.deleteMessage(chatId, statusMessageId);
+                } catch (e) {
+                    console.error('Failed to delete status message:', e.message);
+                }
+            }
 
         } else if (job.name === 'edit-image') {
             // ==================== РЕДАКТИРОВАНИЕ ====================
@@ -85,6 +94,15 @@ const worker = new Worker('image-generation', async job => {
                 filename: 'edited_image.png',
                 contentType: 'image/png'
             });
+
+            // Удаляем сообщение "Рисую..."
+            if (statusMessageId) {
+                try {
+                    await bot.deleteMessage(chatId, statusMessageId);
+                } catch (e) {
+                    console.error('Failed to delete status message:', e.message);
+                }
+            }
         }
 
         console.log(`Job ${job.id} completed successfully`);
@@ -105,6 +123,15 @@ const worker = new Worker('image-generation', async job => {
             });
         } catch (sendError) {
             console.error('Failed to send error notification:', sendError.message);
+        }
+
+        // Удаляем сообщение "Рисую..." даже при ошибке
+        if (statusMessageId) {
+            try {
+                await bot.deleteMessage(chatId, statusMessageId);
+            } catch (e) {
+                console.error('Failed to delete status message on error:', e.message);
+            }
         }
 
         throw error;
