@@ -91,14 +91,31 @@ const worker = new Worker('image-generation', async job => {
     } catch (error) {
         console.error(`Job ${job.id} failed:`, error);
 
-        // Уведомляем об ошибке
-        await bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
-            reply_to_message_id: messageId
-        });
+        // Если это ошибка 429 (Too Many Requests), не пытаемся отправить сообщение
+        // чтобы не усугублять ситуацию
+        if (error?.response?.body?.error_code === 429 || error?.response?.statusCode === 429) {
+            console.warn('⚠️ Telegram Rate Limit hit! Skipping error notification to user.');
+            throw error;
+        }
+
+        // Уведомляем об ошибке (если это не рейт-лимит)
+        try {
+            await bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
+                reply_to_message_id: messageId
+            });
+        } catch (sendError) {
+            console.error('Failed to send error notification:', sendError.message);
+        }
 
         throw error;
     }
-}, { connection });
+}, {
+    connection,
+    limiter: {
+        max: 1,
+        duration: 1000 // Ограничение: 1 задача в секунду
+    }
+});
 
 worker.on('completed', job => {
     console.log(`${job.id} has completed!`);
