@@ -177,27 +177,45 @@ class StatusMessage {
     this.frames = ['.', '..', '...'];
     this.frameIndex = 0;
     this.baseText = '';
+    this.isStopped = false;
   }
 
   async start(text) {
     this.baseText = text;
+    this.isStopped = false;
     try {
       const msg = await this.bot.sendMessage(this.chatId, `${this.baseText} ${this.frames[0]}`);
       this.messageId = msg.message_id;
 
-      this.intervalId = setInterval(() => {
+      // Отправляем action "печатает" или "загружает фото"
+      this.bot.sendChatAction(this.chatId, 'typing').catch(() => { });
+
+      this.intervalId = setInterval(async () => {
+        if (this.isStopped) return;
+
         this.frameIndex = (this.frameIndex + 1) % this.frames.length;
-        this.bot.editMessageText(`${this.baseText} ${this.frames[this.frameIndex]}`, {
-          chat_id: this.chatId,
-          message_id: this.messageId
-        }).catch(() => { }); // Игнорируем ошибки редактирования (например, если текст не изменился)
-      }, 1000);
+
+        try {
+          await this.bot.editMessageText(`${this.baseText} ${this.frames[this.frameIndex]}`, {
+            chat_id: this.chatId,
+            message_id: this.messageId
+          });
+        } catch (error) {
+          // Если словили лимит (429), останавливаем анимацию, чтобы не спамить
+          if (error.response && error.response.statusCode === 429) {
+            console.warn(`⚠️ Rate limit hit in StatusMessage for chat ${this.chatId}. Stopping animation.`);
+            this.stop();
+          }
+          // Игнорируем другие ошибки (например, сообщение не изменилось)
+        }
+      }, 3000); // Увеличили интервал до 3 секунд
     } catch (e) {
       console.error('Ошибка запуска статус-сообщения:', e);
     }
   }
 
   async stop() {
+    this.isStopped = true;
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
@@ -212,6 +230,14 @@ class StatusMessage {
     }
   }
 }
+
+// Обработка ошибок polling (важно для предотвращения падения бота)
+bot.on('polling_error', (error) => {
+  console.error('❌ POLLING ERROR:', error.code, error.message);
+  if (error.code === 'ETELEGRAM' && error.message.includes('429')) {
+    console.warn('⚠️ Telegram Rate Limit hit. Polling will retry automatically.');
+  }
+});
 
 // ==================== КОМАНДЫ ====================
 
