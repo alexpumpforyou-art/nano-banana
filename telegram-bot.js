@@ -1876,7 +1876,8 @@ bot.on('message', async (msg) => {
         prompt,
         userId: user.id,
         messageId: msg.message_id,
-        fileId: photo.file_id
+        fileId: photo.file_id,
+        statusMessageId: statusMsg.messageId
       });
 
       console.log(`✅ [DEBUG] Задача редактирования добавлена в очередь`);
