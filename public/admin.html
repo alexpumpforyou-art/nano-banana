@@ -526,184 +526,212 @@
                     <label for="password">Пароль</label>
                     <input type="password" id="password" required autocomplete="current-password">
                 </div>
-                <h3>Telegram пользователей</h3>
-                <div class="value" id="telegramUsers">-</div>
-        </div>
-        <div class="stat-card info">
-            <h3>Всего генераций</h3>
-            <div class="value" id="totalGenerations">-</div>
-        </div>
-        <div class="stat-card">
-            <h3>Потрачено кредитов</h3>
-            <div class="value" id="totalSpent">-</div>
-        </div>
-        <div class="stat-card danger">
-            <h3>Заблокировано</h3>
-            <div class="value" id="blockedUsers">-</div>
-        </div>
-        <div class="stat-card success">
-            <h3>Получено Stars</h3>
-            <div class="value" id="totalStars">-</div>
-        </div>
-        <div class="stat-card info">
-            <h3>Получено RUB (ЮKassa)</h3>
-            <div class="value" id="totalRub">-</div>
+                <button type="submit" class="btn btn-primary">Войти</button>
+            </form>
         </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('users')">👥 Пользователи</button>
-        <button class="tab-btn" onclick="switchTab('requests')">📝 Запросы</button>
-        <button class="tab-btn" onclick="switchTab('content')">📝 Контент</button>
-    </div>
-
-    <!-- Users Tab -->
-    <div id="usersTab" class="tab-content active">
-        <!-- Controls -->
-        <div class="controls">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="🔍 Поиск по username, ID, referral code...">
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="container">
+        <header>
+            <h1>🍌 Admin Panel - Nano Banana</h1>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-success" onclick="openBroadcastModal()"
+                    style="padding: 10px 20px; font-size: 14px;">📢 Массовая рассылка</button>
+                <button class="btn" onclick="recalculateStats()"
+                    style="padding: 10px 20px; font-size: 14px; background: var(--info); color: white;">🔄 Пересчитать
+                    статистику</button>
+                <button class="logout-btn" onclick="logout()">Выйти</button>
             </div>
-            <button class="filter-btn active" onclick="setFilter('all')">Все</button>
-            <button class="filter-btn" onclick="setFilter('telegram')">Telegram</button>
-            <button class="filter-btn" onclick="setFilter('web')">Web</button>
-            <button class="filter-btn" onclick="setFilter('blocked')">Заблокированные</button>
-        </div>
+        </header>
 
-        <!-- Users Table -->
-        <div class="users-table-container">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Telegram ID</th>
-                            <th>Тип</th>
-                            <th>Кредиты</th>
-                            <th>Генераций</th>
-                            <th>Потрачено</th>
-                            <th>Рефералов</th>
-                            <th>Статус</th>
-                            <th>Регистрация</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <tr>
-                            <td colspan="11" class="loading">Загрузка...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Requests Tab -->
-    <div id="requestsTab" class="tab-content">
-        <div class="requests-table-container">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Пользователь</th>
-                            <th>Запрос (промпт)</th>
-                            <th>Тип</th>
-                            <th>Кредитов</th>
-                            <th>Дата</th>
-                            <th>Результат</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="requestsTableBody">
-                        <tr>
-                            <td colspan="8" class="loading">Загрузка...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Content Tab -->
-    <div id="contentTab" class="tab-content">
-        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
-            <button class="btn btn-success" onclick="loadContent('welcome')">📝 Приветствие</button>
-            <button class="btn btn-success" onclick="loadContent('menu')">📋 Меню</button>
-            <button class="btn btn-success" onclick="loadContent('examples')">🖼️ Примеры</button>
-        </div>
-        <div id="contentEditor" style="display: none;">
-            <div class="users-table-container" style="padding: 20px;">
-                <h3 id="contentEditorTitle">Редактирование контента</h3>
-                <div class="form-group" style="margin-top: 20px;">
-                    <label for="contentTitle">Название</label>
-                    <input type="text" id="contentTitle" placeholder="Название контента"
-                        style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+        <div class="content">
+            <!-- Statistics -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <h3>Всего пользователей</h3>
+                    <div class="value" id="totalUsers">-</div>
                 </div>
-                <div class="form-group" style="margin-top: 15px;">
-                    <label for="contentText">Текст</label>
-                    <textarea id="contentText"
-                        placeholder="Текст сообщения. Используйте {credits} для баланса, {generations} для количества генераций"
-                        style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px; min-height: 150px; font-family: inherit;"></textarea>
-                    <small style="color: var(--gray); margin-top: 5px; display: block;">Поддерживаются
-                        переменные: {credits}, {generations}, {username}</small>
+                <div class="stat-card success">
+                    <h3>Telegram пользователей</h3>
+                    <div class="value" id="telegramUsers">-</div>
                 </div>
-                <div class="form-group" style="margin-top: 15px;">
-                    <label for="contentImage">Изображение</label>
-                    <input type="file" id="contentImage" accept="image/*"
-                        style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
-                    <div id="contentImagePreview" style="margin-top: 15px; display: none;">
-                        <img id="contentImagePreviewImg" src=""
-                            style="max-width: 300px; max-height: 300px; border-radius: 10px; border: 2px solid var(--light);">
-                        <button class="btn" style="background: var(--danger); color: white; margin-top: 10px;"
-                            onclick="removeContentImage()">Удалить изображение</button>
+                <div class="stat-card info">
+                    <h3>Всего генераций</h3>
+                    <div class="value" id="totalGenerations">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Потрачено кредитов</h3>
+                    <div class="value" id="totalSpent">-</div>
+                </div>
+                <div class="stat-card danger">
+                    <h3>Заблокировано</h3>
+                    <div class="value" id="blockedUsers">-</div>
+                </div>
+                <div class="stat-card success">
+                    <h3>Получено Stars</h3>
+                    <div class="value" id="totalStars">-</div>
+                </div>
+                <div class="stat-card info">
+                    <h3>Получено RUB (ЮKassa)</h3>
+                    <div class="value" id="totalRub">-</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('users')">👥 Пользователи</button>
+                <button class="tab-btn" onclick="switchTab('requests')">📝 Запросы</button>
+                <button class="tab-btn" onclick="switchTab('content')">📝 Контент</button>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="usersTab" class="tab-content active">
+                <!-- Controls -->
+                <div class="controls">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="🔍 Поиск по username, ID, referral code...">
+                    </div>
+                    <button class="filter-btn active" onclick="setFilter('all')">Все</button>
+                    <button class="filter-btn" onclick="setFilter('telegram')">Telegram</button>
+                    <button class="filter-btn" onclick="setFilter('web')">Web</button>
+                    <button class="filter-btn" onclick="setFilter('blocked')">Заблокированные</button>
+                </div>
+
+                <!-- Users Table -->
+                <div class="users-table-container">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Telegram ID</th>
+                                    <th>Тип</th>
+                                    <th>Кредиты</th>
+                                    <th>Генераций</th>
+                                    <th>Потрачено</th>
+                                    <th>Рефералов</th>
+                                    <th>Статус</th>
+                                    <th>Регистрация</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr>
+                                    <td colspan="11" class="loading">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="form-group" style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="contentActive" checked>
-                        <span>Активен</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <span>Порядок:</span>
-                        <input type="number" id="contentOrder" value="0" style="width: 80px; padding: 5px;">
-                    </label>
+            </div>
+
+            <!-- Requests Tab -->
+            <div id="requestsTab" class="tab-content">
+                <div class="requests-table-container">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Пользователь</th>
+                                    <th>Запрос (промпт)</th>
+                                    <th>Тип</th>
+                                    <th>Кредитов</th>
+                                    <th>Дата</th>
+                                    <th>Результат</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requestsTableBody">
+                                <tr>
+                                    <td colspan="8" class="loading">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="error-message" id="contentError" style="display: none; margin-top: 15px;"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="btn btn-success" onclick="saveContent()">💾 Сохранить</button>
-                    <button class="btn" style="background: var(--gray); color: white;"
-                        onclick="cancelContentEdit()">Отмена</button>
+            </div>
+
+            <!-- Content Tab -->
+            <div id="contentTab" class="tab-content">
+                <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                    <button class="btn btn-success" onclick="loadContent('welcome')">📝 Приветствие</button>
+                    <button class="btn btn-success" onclick="loadContent('menu')">📋 Меню</button>
+                    <button class="btn btn-success" onclick="loadContent('examples')">🖼️ Примеры</button>
+                </div>
+                <div id="contentEditor" style="display: none;">
+                    <div class="users-table-container" style="padding: 20px;">
+                        <h3 id="contentEditorTitle">Редактирование контента</h3>
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="contentTitle">Название</label>
+                            <input type="text" id="contentTitle" placeholder="Название контента"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="contentText">Текст</label>
+                            <textarea id="contentText"
+                                placeholder="Текст сообщения. Используйте {credits} для баланса, {generations} для количества генераций"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px; min-height: 150px; font-family: inherit;"></textarea>
+                            <small style="color: var(--gray); margin-top: 5px; display: block;">Поддерживаются
+                                переменные: {credits}, {generations}, {username}</small>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="contentImage">Изображение</label>
+                            <input type="file" id="contentImage" accept="image/*"
+                                style="width: 100%; padding: 12px; border: 2px solid var(--light); border-radius: 10px; font-size: 16px;">
+                            <div id="contentImagePreview" style="margin-top: 15px; display: none;">
+                                <img id="contentImagePreviewImg" src=""
+                                    style="max-width: 300px; max-height: 300px; border-radius: 10px; border: 2px solid var(--light);">
+                                <button class="btn" style="background: var(--danger); color: white; margin-top: 10px;"
+                                    onclick="removeContentImage()">Удалить изображение</button>
+                            </div>
+                        </div>
+                        <div class="form-group"
+                            style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="contentActive" checked>
+                                <span>Активен</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <span>Порядок:</span>
+                                <input type="number" id="contentOrder" value="0" style="width: 80px; padding: 5px;">
+                            </label>
+                        </div>
+                        <div class="error-message" id="contentError" style="display: none; margin-top: 15px;"></div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn btn-success" onclick="saveContent()">💾 Сохранить</button>
+                            <button class="btn" style="background: var(--gray); color: white;"
+                                onclick="cancelContentEdit()">Отмена</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="contentList" class="users-table-container" style="margin-top: 20px;">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Тип</th>
+                                    <th>Название</th>
+                                    <th>Текст</th>
+                                    <th>Изображение</th>
+                                    <th>Порядок</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contentTableBody">
+                                <tr>
+                                    <td colspan="8" class="loading">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-        <div id="contentList" class="users-table-container" style="margin-top: 20px;">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Тип</th>
-                            <th>Название</th>
-                            <th>Текст</th>
-                            <th>Изображение</th>
-                            <th>Порядок</th>
-                            <th>Статус</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="contentTableBody">
-                        <tr>
-                            <td colspan="8" class="loading">Загрузка...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    </div>
     </div>
 
     <!-- User Details Modal -->
@@ -816,194 +844,206 @@
                         style="padding: 15px; background: var(--background); border-radius: 10px; margin-bottom: 15px; display: none;">
                         <strong>Предварительный просмотр:</strong>
                         <div id="broadcastPreviewText" style="margin-top: 10px; color: var(--gray);"></div>
-                        <!-- Progress Section -->
-                        <div id="broadcastProgress"
-                            style="display: none; margin-top: 20px; padding: 20px; background: var(--background); border-radius: 10px;">
-                            <h3>Прогресс рассылки</h3>
-                            <div style="margin: 15px 0;">
-                                <div
-                                    style="background: var(--light); border-radius: 10px; height: 30px; position: relative; overflow: hidden;">
-                                    <div id="broadcastProgressBar"
-                                        style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
-                                    </div>
-                                </div>
-                                <div style="margin-top: 10px; text-align: center;">
-                                    <span id="broadcastProgressText">0 / 0</span>
-                                </div>
-                            </div>
-                            <div id="broadcastResults"
-                                style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 10px;">
-                                <h4>Результаты:</h4>
-                                <div id="broadcastResultsText"></div>
-                            </div>
-                        </div>
+                    </div>
+
+                    <div class="error-message" id="broadcastError" style="display: none;"></div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="startBroadcast()">📢 Начать рассылку</button>
+                        <button class="btn" style="background: var(--gray); color: white;"
+                            onclick="closeBroadcastModal()">Отмена</button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Send Message Modal -->
-                <div id="sendMessageModal" class="modal">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h2>Отправить сообщение пользователю</h2>
-                            <button class="close-btn" onclick="closeSendMessageModal()">Закрыть</button>
-                        </div>
-                        <div id="sendMessageContent">
-                            <div class="send-message-form">
-                                <div class="form-group">
-                                    <label>Получатель</label>
-                                    <div id="messageRecipient"
-                                        style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="messageText">Сообщение</label>
-                                    <textarea id="messageText" placeholder="Введите сообщение для пользователя..."
-                                        required></textarea>
-                                </div>
-                                <div class="error-message" id="sendMessageError" style="display: none;"></div>
-                                <div class="btn-group">
-                                    <button class="btn btn-success" onclick="sendMessage()">📤 Отправить</button>
-                                    <button class="btn" style="background: var(--gray); color: white;"
-                                        onclick="closeSendMessageModal()">Отмена</button>
-                                </div>
-                            </div>
+            <!-- Progress Section -->
+            <div id="broadcastProgress"
+                style="display: none; margin-top: 20px; padding: 20px; background: var(--background); border-radius: 10px;">
+                <h3>Прогресс рассылки</h3>
+                <div style="margin: 15px 0;">
+                    <div
+                        style="background: var(--light); border-radius: 10px; height: 30px; position: relative; overflow: hidden;">
+                        <div id="broadcastProgressBar"
+                            style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
                         </div>
                     </div>
+                    <div style="margin-top: 10px; text-align: center;">
+                        <span id="broadcastProgressText">0 / 0</span>
+                    </div>
                 </div>
-                <script>
-                    let sessionId = null;
-                    let allUsers = [];
-                    let currentFilter = 'all';
+                <div id="broadcastResults"
+                    style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 10px;">
+                    <h4>Результаты:</h4>
+                    <div id="broadcastResultsText"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                    // Login
-                    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-                        e.preventDefault();
-                        const password = document.getElementById('password').value;
-                        const errorDiv = document.getElementById('loginError');
+    <!-- Send Message Modal -->
+    <div id="sendMessageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Отправить сообщение пользователю</h2>
+                <button class="close-btn" onclick="closeSendMessageModal()">Закрыть</button>
+            </div>
+            <div id="sendMessageContent">
+                <div class="send-message-form">
+                    <div class="form-group">
+                        <label>Получатель</label>
+                        <div id="messageRecipient"
+                            style="padding: 10px; background: var(--background); border-radius: 10px; margin-bottom: 15px;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="messageText">Сообщение</label>
+                        <textarea id="messageText" placeholder="Введите сообщение для пользователя..."
+                            required></textarea>
+                    </div>
+                    <div class="error-message" id="sendMessageError" style="display: none;"></div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="sendMessage()">📤 Отправить</button>
+                        <button class="btn" style="background: var(--gray); color: white;"
+                            onclick="closeSendMessageModal()">Отмена</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let sessionId = null;
+        let allUsers = [];
+        let currentFilter = 'all';
 
-                        try {
-                            const response = await fetch('/api/admin/login', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ password })
-                            });
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
 
-                            const data = await response.json();
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
 
-                            if (data.success) {
-                                sessionId = data.sessionId;
-                                localStorage.setItem('adminSession', sessionId);
-                                document.getElementById('loginScreen').style.display = 'none';
-                                document.getElementById('adminPanel').style.display = 'block';
-                                loadData();
-                            } else {
-                                errorDiv.textContent = data.error || 'Ошибка входа';
-                                errorDiv.style.display = 'block';
-                            }
-                        } catch (error) {
-                            errorDiv.textContent = 'Ошибка подключения к серверу';
-                            errorDiv.style.display = 'block';
-                        }
-                    });
+                const data = await response.json();
 
-                    // Check existing session
-                    window.addEventListener('load', () => {
-                        const savedSession = localStorage.getItem('adminSession');
-                        if (savedSession) {
-                            sessionId = savedSession;
-                            document.getElementById('loginScreen').style.display = 'none';
-                            document.getElementById('adminPanel').style.display = 'block';
-                            loadData();
-                        }
-                    });
+                if (data.success) {
+                    sessionId = data.sessionId;
+                    localStorage.setItem('adminSession', sessionId);
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('adminPanel').style.display = 'block';
+                    loadData();
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка входа';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу';
+                errorDiv.style.display = 'block';
+            }
+        });
 
-                    // Logout
-                    function logout() {
-                        sessionId = null;
-                        localStorage.removeItem('adminSession');
-                        document.getElementById('loginScreen').style.display = 'flex';
-                        document.getElementById('adminPanel').style.display = 'none';
-                    }
+        // Check existing session
+        window.addEventListener('load', () => {
+            const savedSession = localStorage.getItem('adminSession');
+            if (savedSession) {
+                sessionId = savedSession;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadData();
+            }
+        });
 
-                    // API helper
-                    async function apiCall(endpoint) {
-                        const response = await fetch(endpoint, {
-                            headers: { 'X-Admin-Session': sessionId }
-                        });
-                        const data = await response.json();
-                        if (!data.success && data.error === 'Сессия истекла') {
-                            logout();
-                            alert('Сессия истекла. Пожалуйста, войдите снова.');
-                        }
-                        return data;
-                    }
+        // Logout
+        function logout() {
+            sessionId = null;
+            localStorage.removeItem('adminSession');
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('adminPanel').style.display = 'none';
+        }
 
-                    // Load data
-                    async function loadData() {
-                        try {
-                            // Load stats
-                            const statsData = await apiCall('/api/admin/stats');
-                            if (statsData.success) {
-                                const { users, transactions, generations } = statsData.stats;
-                                document.getElementById('totalUsers').textContent = users.total_users || 0;
-                                document.getElementById('telegramUsers').textContent = users.telegram_users || 0;
-                                document.getElementById('totalGenerations').textContent = users.total_generations || 0;
-                                document.getElementById('totalSpent').textContent = users.total_spent_credits || 0;
-                                document.getElementById('blockedUsers').textContent = users.blocked_users || 0;
-                                document.getElementById('totalStars').textContent = (transactions.total_stars_received || 0) + ' ⭐';
-                                document.getElementById('totalRub').textContent = (transactions.total_rub_received || 0).toLocaleString('ru-RU') + ' ₽';
-                            }
+        // API helper
+        async function apiCall(endpoint) {
+            const response = await fetch(endpoint, {
+                headers: { 'X-Admin-Session': sessionId }
+            });
+            const data = await response.json();
+            if (!data.success && data.error === 'Сессия истекла') {
+                logout();
+                alert('Сессия истекла. Пожалуйста, войдите снова.');
+            }
+            return data;
+        }
 
-                            // Load users
-                            const usersData = await apiCall('/api/admin/users');
-                            if (usersData.success) {
-                                allUsers = usersData.users;
-                                renderUsers();
-                            }
-                        } catch (error) {
-                            console.error('Ошибка загрузки данных:', error);
-                        }
-                    }
+        // Load data
+        async function loadData() {
+            try {
+                // Load stats
+                const statsData = await apiCall('/api/admin/stats');
+                if (statsData.success) {
+                    const { users, transactions, generations } = statsData.stats;
+                    document.getElementById('totalUsers').textContent = users.total_users || 0;
+                    document.getElementById('telegramUsers').textContent = users.telegram_users || 0;
+                    document.getElementById('totalGenerations').textContent = users.total_generations || 0;
+                    document.getElementById('totalSpent').textContent = users.total_spent_credits || 0;
+                    document.getElementById('blockedUsers').textContent = users.blocked_users || 0;
+                    document.getElementById('totalStars').textContent = (transactions.total_stars_received || 0) + ' ⭐';
+                    document.getElementById('totalRub').textContent = (transactions.total_rub_received || 0).toLocaleString('ru-RU') + ' ₽';
+                }
 
-                    // Render users
-                    function renderUsers() {
-                        const tbody = document.getElementById('usersTableBody');
-                        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                // Load users
+                const usersData = await apiCall('/api/admin/users');
+                if (usersData.success) {
+                    allUsers = usersData.users;
+                    renderUsers();
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+            }
+        }
 
-                        let filtered = allUsers;
+        // Render users
+        function renderUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
-                        // Apply filter
-                        if (currentFilter === 'telegram') {
-                            filtered = filtered.filter(u => u.telegram_id);
-                        } else if (currentFilter === 'web') {
-                            filtered = filtered.filter(u => u.web_id);
-                        } else if (currentFilter === 'blocked') {
-                            filtered = filtered.filter(u => u.is_blocked === 1);
-                        }
+            let filtered = allUsers;
 
-                        // Apply search
-                        if (searchTerm) {
-                            filtered = filtered.filter(u =>
-                                (u.username && u.username.toLowerCase().includes(searchTerm)) ||
-                                (u.telegram_id && u.telegram_id.includes(searchTerm)) ||
-                                (u.id && u.id.toString().includes(searchTerm)) ||
-                                (u.referral_code && u.referral_code.toLowerCase().includes(searchTerm))
-                            );
-                        }
+            // Apply filter
+            if (currentFilter === 'telegram') {
+                filtered = filtered.filter(u => u.telegram_id);
+            } else if (currentFilter === 'web') {
+                filtered = filtered.filter(u => u.web_id);
+            } else if (currentFilter === 'blocked') {
+                filtered = filtered.filter(u => u.is_blocked === 1);
+            }
 
-                        if (filtered.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="11" class="empty-state"><h3>Пользователи не найдены</h3></td></tr>';
-                            return;
-                        }
+            // Apply search
+            if (searchTerm) {
+                filtered = filtered.filter(u =>
+                    (u.username && u.username.toLowerCase().includes(searchTerm)) ||
+                    (u.telegram_id && u.telegram_id.includes(searchTerm)) ||
+                    (u.id && u.id.toString().includes(searchTerm)) ||
+                    (u.referral_code && u.referral_code.toLowerCase().includes(searchTerm))
+                );
+            }
 
-                        tbody.innerHTML = filtered.map(user => {
-                            const type = user.telegram_id ? 'Telegram' : 'Web';
-                            const status = user.is_blocked === 1
-                                ? '<span class="badge badge-danger">Заблокирован</span>'
-                                : '<span class="badge badge-success">Активен</span>';
-                            const regDate = new Date(user.created_at).toLocaleDateString('ru-RU');
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="empty-state"><h3>Пользователи не найдены</h3></td></tr>';
+                return;
+            }
 
-                            return `
+            tbody.innerHTML = filtered.map(user => {
+                const type = user.telegram_id ? 'Telegram' : 'Web';
+                const status = user.is_blocked === 1
+                    ? '<span class="badge badge-danger">Заблокирован</span>'
+                    : '<span class="badge badge-success">Активен</span>';
+                const regDate = new Date(user.created_at).toLocaleDateString('ru-RU');
+
+                return `
                     <tr>
                         <td>${user.id}</td>
                         <td>${user.username || '-'}</td>
@@ -1022,33 +1062,33 @@
                         </td>
                     </tr>
             `;
-                        }).join('');
-                    }
+            }).join('');
+        }
 
-                    // Set filter
-                    function setFilter(filter) {
-                        currentFilter = filter;
-                        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                        event.target.classList.add('active');
-                        renderUsers();
-                    }
+        // Set filter
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            renderUsers();
+        }
 
-                    // Search
-                    document.getElementById('searchInput').addEventListener('input', renderUsers);
+        // Search
+        document.getElementById('searchInput').addEventListener('input', renderUsers);
 
-                    // Show user details
-                    async function showUserDetails(userId) {
-                        const modal = document.getElementById('userModal');
-                        const content = document.getElementById('userModalContent');
-                        modal.style.display = 'block';
-                        content.innerHTML = '<div class="loading">Загрузка...</div>';
+        // Show user details
+        async function showUserDetails(userId) {
+            const modal = document.getElementById('userModal');
+            const content = document.getElementById('userModalContent');
+            modal.style.display = 'block';
+            content.innerHTML = '<div class="loading">Загрузка...</div>';
 
-                        try {
-                            const data = await apiCall(`/api/admin/user/${userId}`);
-                            if (data.success) {
-                                const { user, generations, transactions, referrals } = data.user;
+            try {
+                const data = await apiCall(`/api/admin/user/${userId}`);
+                if (data.success) {
+                    const { user, generations, transactions, referrals } = data.user;
 
-                                content.innerHTML = `
+                    content.innerHTML = `
                 <div class="modal-section">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                         <h3 style="margin: 0;">Основная информация</h3>
@@ -1122,13 +1162,13 @@
                         <div class="modal-section">
                             <h3>Генерации (${generations.length})</h3>
                             ${generations.length === 0
-                                        ? '<div class="empty-state"><h3>Нет генераций</h3></div>'
-                                        : generations.slice(0, 10).map(gen => {
-                                            const hasImage = gen.image_data;
-                                            const imageHtml = hasImage
-                                                ? `<div style="margin-top: 10px;"><img src="data:image/png;base64,${gen.image_data}" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${gen.image_data}')" title="Нажмите для увеличения"></div>`
-                                                : '';
-                                            return `
+                            ? '<div class="empty-state"><h3>Нет генераций</h3></div>'
+                            : generations.slice(0, 10).map(gen => {
+                                const hasImage = gen.image_data;
+                                const imageHtml = hasImage
+                                    ? `<div style="margin-top: 10px;"><img src="data:image/png;base64,${gen.image_data}" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer;" onclick="showImageModal('data:image/png;base64,${gen.image_data}')" title="Нажмите для увеличения"></div>`
+                                    : '';
+                                return `
                                     <div class="history-item">
                                         <div class="header">
                                             <span class="badge badge-info">${gen.type || 'text'}</span>
@@ -1141,15 +1181,15 @@
                                         </div>
                                     </div>
                                 `;
-                                        }).join('')
-                                    }
+                            }).join('')
+                        }
                         </div>
 
                         <div class="modal-section">
                             <h3>Транзакции (${transactions.length})</h3>
                             ${transactions.length === 0
-                                        ? '<div class="empty-state"><h3>Нет транзакций</h3></div>'
-                                        : transactions.slice(0, 10).map(tx => `
+                            ? '<div class="empty-state"><h3>Нет транзакций</h3></div>'
+                            : transactions.slice(0, 10).map(tx => `
                                     <div class="history-item">
                                         <div class="header">
                                             <span class="badge ${tx.amount > 0 ? 'badge-success' : 'badge-danger'}">${tx.type}</span>
@@ -1162,7 +1202,7 @@
                                         </div>
                                     </div>
                                 `).join('')
-                                    }
+                        }
                         </div>
 
                         ${referrals.length > 0 ? `
@@ -1181,233 +1221,233 @@
                                 `).join('')}
                             </div>
                         ` : ''
-                                    }
+                        }
             `;
-                            }
-                        } catch (error) {
-                            content.innerHTML = `<div class="error-message">Ошибка загрузки данных: ${error.message}</div>`;
-                        }
+                }
+            } catch (error) {
+                content.innerHTML = `<div class="error-message">Ошибка загрузки данных: ${error.message}</div>`;
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('userModal').style.display = 'none';
+        }
+
+        // Close modal on outside click
+        window.onclick = function (event) {
+            const modal = document.getElementById('userModal');
+            const sendModal = document.getElementById('sendMessageModal');
+            const imageModal = document.getElementById('imageModal');
+            const creditsModal = document.getElementById('addCreditsModal');
+            const broadcastModal = document.getElementById('broadcastModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+            if (event.target === sendModal) {
+                closeSendMessageModal();
+            }
+            if (event.target === imageModal) {
+                closeImageModal();
+            }
+            if (event.target === creditsModal) {
+                closeAddCreditsModal();
+            }
+            if (event.target === broadcastModal) {
+                closeBroadcastModal();
+            }
+        }
+
+        // Image modal functions
+        function showImageModal(imageSrc) {
+            document.getElementById('modalImage').src = imageSrc;
+            document.getElementById('imageModal').style.display = 'block';
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        // Add credits functions
+        let currentCreditsUserId = null;
+        function openAddCredits(userId, username, currentCredits) {
+            currentCreditsUserId = userId;
+            const modal = document.getElementById('addCreditsModal');
+            const recipientDiv = document.getElementById('creditsRecipient');
+            recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})<br><small>Текущий баланс: ${currentCredits} кредитов</small>`;
+            document.getElementById('creditsAmount').value = '';
+            document.getElementById('creditsDescription').value = '';
+            document.getElementById('addCreditsError').style.display = 'none';
+            modal.style.display = 'block';
+        }
+
+        function closeAddCreditsModal() {
+            document.getElementById('addCreditsModal').style.display = 'none';
+            currentCreditsUserId = null;
+        }
+
+        async function addCredits() {
+            const creditsAmount = parseInt(document.getElementById('creditsAmount').value);
+            const description = document.getElementById('creditsDescription').value.trim();
+            const errorDiv = document.getElementById('addCreditsError');
+
+            if (!creditsAmount || isNaN(creditsAmount) || creditsAmount === 0) {
+                errorDiv.textContent = 'Введите количество кредитов (не равное нулю)';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!currentCreditsUserId) {
+                errorDiv.textContent = 'Ошибка: не выбран пользователь';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            const addBtn = event.target;
+            const originalText = addBtn.textContent;
+            addBtn.disabled = true;
+            addBtn.textContent = 'Начисление...';
+
+            try {
+                const response = await fetch('/api/admin/add-credits', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        userId: currentCreditsUserId,
+                        credits: creditsAmount,
+                        description: description || undefined
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`✅ ${data.message}\n\nНовый баланс: ${data.user.credits} кредитов`);
+                    closeAddCreditsModal();
+                    // Обновляем данные
+                    if (document.getElementById('userModal').style.display === 'block') {
+                        showUserDetails(currentCreditsUserId);
                     }
+                    loadData(); // Обновляем список пользователей
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка начисления кредитов';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу';
+                errorDiv.style.display = 'block';
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = originalText;
+            }
+        }
 
-                    // Close modal
-                    function closeModal() {
-                        document.getElementById('userModal').style.display = 'none';
-                    }
+        // Broadcast functions
+        function openBroadcastModal() {
+            document.getElementById('broadcastModal').style.display = 'block';
+            document.getElementById('broadcastMessage').value = '';
+            document.getElementById('filterOnlyActive').checked = true;
+            document.getElementById('filterOnlyBlocked').checked = false;
+            document.getElementById('filterMinCredits').value = '';
+            document.getElementById('filterMaxCredits').value = '';
+            document.getElementById('broadcastError').style.display = 'none';
+            document.getElementById('broadcastPreview').style.display = 'none';
+            document.getElementById('broadcastProgress').style.display = 'none';
+            document.getElementById('broadcastResults').style.display = 'none';
+        }
 
-                    // Close modal on outside click
-                    window.onclick = function (event) {
-                        const modal = document.getElementById('userModal');
-                        const sendModal = document.getElementById('sendMessageModal');
-                        const imageModal = document.getElementById('imageModal');
-                        const creditsModal = document.getElementById('addCreditsModal');
-                        const broadcastModal = document.getElementById('broadcastModal');
-                        if (event.target === modal) {
-                            closeModal();
-                        }
-                        if (event.target === sendModal) {
-                            closeSendMessageModal();
-                        }
-                        if (event.target === imageModal) {
-                            closeImageModal();
-                        }
-                        if (event.target === creditsModal) {
-                            closeAddCreditsModal();
-                        }
-                        if (event.target === broadcastModal) {
-                            closeBroadcastModal();
-                        }
-                    }
+        function closeBroadcastModal() {
+            document.getElementById('broadcastModal').style.display = 'none';
+        }
 
-                    // Image modal functions
-                    function showImageModal(imageSrc) {
-                        document.getElementById('modalImage').src = imageSrc;
-                        document.getElementById('imageModal').style.display = 'block';
-                    }
+        async function startBroadcast() {
+            const message = document.getElementById('broadcastMessage').value.trim();
+            const errorDiv = document.getElementById('broadcastError');
+            const progressDiv = document.getElementById('broadcastProgress');
+            const resultsDiv = document.getElementById('broadcastResults');
+            const progressBar = document.getElementById('broadcastProgressBar');
+            const progressText = document.getElementById('broadcastProgressText');
+            const resultsText = document.getElementById('broadcastResultsText');
 
-                    function closeImageModal() {
-                        document.getElementById('imageModal').style.display = 'none';
-                    }
+            if (!message) {
+                errorDiv.textContent = 'Введите сообщение для рассылки';
+                errorDiv.style.display = 'block';
+                return;
+            }
 
-                    // Add credits functions
-                    let currentCreditsUserId = null;
-                    function openAddCredits(userId, username, currentCredits) {
-                        currentCreditsUserId = userId;
-                        const modal = document.getElementById('addCreditsModal');
-                        const recipientDiv = document.getElementById('creditsRecipient');
-                        recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})<br><small>Текущий баланс: ${currentCredits} кредитов</small>`;
-                        document.getElementById('creditsAmount').value = '';
-                        document.getElementById('creditsDescription').value = '';
-                        document.getElementById('addCreditsError').style.display = 'none';
-                        modal.style.display = 'block';
-                    }
+            // Проверяем конфликтующие фильтры
+            const onlyActive = document.getElementById('filterOnlyActive').checked;
+            const onlyBlocked = document.getElementById('filterOnlyBlocked').checked;
 
-                    function closeAddCreditsModal() {
-                        document.getElementById('addCreditsModal').style.display = 'none';
-                        currentCreditsUserId = null;
-                    }
+            if (onlyActive && onlyBlocked) {
+                errorDiv.textContent = 'Нельзя выбрать одновременно "только активные" и "только заблокированные"';
+                errorDiv.style.display = 'block';
+                return;
+            }
 
-                    async function addCredits() {
-                        const creditsAmount = parseInt(document.getElementById('creditsAmount').value);
-                        const description = document.getElementById('creditsDescription').value.trim();
-                        const errorDiv = document.getElementById('addCreditsError');
+            // Подтверждение
+            const totalUsers = document.getElementById('telegramUsers').textContent;
+            if (!confirm(`Вы уверены, что хотите отправить сообщение всем Telegram пользователям (${totalUsers})?\n\nЭто действие нельзя отменить.`)) {
+                return;
+            }
 
-                        if (!creditsAmount || isNaN(creditsAmount) || creditsAmount === 0) {
-                            errorDiv.textContent = 'Введите количество кредитов (не равное нулю)';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
+            errorDiv.style.display = 'none';
+            progressDiv.style.display = 'block';
+            resultsDiv.style.display = 'none';
 
-                        if (!currentCreditsUserId) {
-                            errorDiv.textContent = 'Ошибка: не выбран пользователь';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
+            // Собираем фильтры
+            const filters = {
+                onlyActive: onlyActive,
+                onlyBlocked: onlyBlocked
+            };
 
-                        errorDiv.style.display = 'none';
-                        const addBtn = event.target;
-                        const originalText = addBtn.textContent;
-                        addBtn.disabled = true;
-                        addBtn.textContent = 'Начисление...';
+            const minCredits = document.getElementById('filterMinCredits').value.trim();
+            const maxCredits = document.getElementById('filterMaxCredits').value.trim();
 
-                        try {
-                            const response = await fetch('/api/admin/add-credits', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Admin-Session': sessionId
-                                },
-                                body: JSON.stringify({
-                                    userId: currentCreditsUserId,
-                                    credits: creditsAmount,
-                                    description: description || undefined
-                                })
-                            });
+            if (minCredits) {
+                filters.minCredits = parseInt(minCredits);
+            }
+            if (maxCredits) {
+                filters.maxCredits = parseInt(maxCredits);
+            }
 
-                            const data = await response.json();
+            // Начинаем рассылку
+            const startBtn = event.target;
+            const originalText = startBtn.textContent;
+            startBtn.disabled = true;
+            startBtn.textContent = 'Рассылка начата...';
 
-                            if (data.success) {
-                                alert(`✅ ${data.message}\n\nНовый баланс: ${data.user.credits} кредитов`);
-                                closeAddCreditsModal();
-                                // Обновляем данные
-                                if (document.getElementById('userModal').style.display === 'block') {
-                                    showUserDetails(currentCreditsUserId);
-                                }
-                                loadData(); // Обновляем список пользователей
-                            } else {
-                                errorDiv.textContent = data.error || 'Ошибка начисления кредитов';
-                                errorDiv.style.display = 'block';
-                            }
-                        } catch (error) {
-                            errorDiv.textContent = 'Ошибка подключения к серверу';
-                            errorDiv.style.display = 'block';
-                        } finally {
-                            addBtn.disabled = false;
-                            addBtn.textContent = originalText;
-                        }
-                    }
+            try {
+                const response = await fetch('/api/admin/broadcast', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        filters: filters
+                    })
+                });
 
-                    // Broadcast functions
-                    function openBroadcastModal() {
-                        document.getElementById('broadcastModal').style.display = 'block';
-                        document.getElementById('broadcastMessage').value = '';
-                        document.getElementById('filterOnlyActive').checked = true;
-                        document.getElementById('filterOnlyBlocked').checked = false;
-                        document.getElementById('filterMinCredits').value = '';
-                        document.getElementById('filterMaxCredits').value = '';
-                        document.getElementById('broadcastError').style.display = 'none';
-                        document.getElementById('broadcastPreview').style.display = 'none';
-                        document.getElementById('broadcastProgress').style.display = 'none';
-                        document.getElementById('broadcastResults').style.display = 'none';
-                    }
+                const data = await response.json();
 
-                    function closeBroadcastModal() {
-                        document.getElementById('broadcastModal').style.display = 'none';
-                    }
+                if (data.success) {
+                    const { results } = data;
 
-                    async function startBroadcast() {
-                        const message = document.getElementById('broadcastMessage').value.trim();
-                        const errorDiv = document.getElementById('broadcastError');
-                        const progressDiv = document.getElementById('broadcastProgress');
-                        const resultsDiv = document.getElementById('broadcastResults');
-                        const progressBar = document.getElementById('broadcastProgressBar');
-                        const progressText = document.getElementById('broadcastProgressText');
-                        const resultsText = document.getElementById('broadcastResultsText');
+                    // Обновляем прогресс
+                    const percentage = (results.sent / results.total) * 100;
+                    progressBar.style.width = percentage + '%';
+                    progressBar.textContent = Math.round(percentage) + '%';
+                    progressText.textContent = `${results.sent} / ${results.total} отправлено`;
 
-                        if (!message) {
-                            errorDiv.textContent = 'Введите сообщение для рассылки';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
-
-                        // Проверяем конфликтующие фильтры
-                        const onlyActive = document.getElementById('filterOnlyActive').checked;
-                        const onlyBlocked = document.getElementById('filterOnlyBlocked').checked;
-
-                        if (onlyActive && onlyBlocked) {
-                            errorDiv.textContent = 'Нельзя выбрать одновременно "только активные" и "только заблокированные"';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
-
-                        // Подтверждение
-                        const totalUsers = document.getElementById('telegramUsers').textContent;
-                        if (!confirm(`Вы уверены, что хотите отправить сообщение всем Telegram пользователям (${totalUsers})?\n\nЭто действие нельзя отменить.`)) {
-                            return;
-                        }
-
-                        errorDiv.style.display = 'none';
-                        progressDiv.style.display = 'block';
-                        resultsDiv.style.display = 'none';
-
-                        // Собираем фильтры
-                        const filters = {
-                            onlyActive: onlyActive,
-                            onlyBlocked: onlyBlocked
-                        };
-
-                        const minCredits = document.getElementById('filterMinCredits').value.trim();
-                        const maxCredits = document.getElementById('filterMaxCredits').value.trim();
-
-                        if (minCredits) {
-                            filters.minCredits = parseInt(minCredits);
-                        }
-                        if (maxCredits) {
-                            filters.maxCredits = parseInt(maxCredits);
-                        }
-
-                        // Начинаем рассылку
-                        const startBtn = event.target;
-                        const originalText = startBtn.textContent;
-                        startBtn.disabled = true;
-                        startBtn.textContent = 'Рассылка начата...';
-
-                        try {
-                            const response = await fetch('/api/admin/broadcast', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Admin-Session': sessionId
-                                },
-                                body: JSON.stringify({
-                                    message: message,
-                                    filters: filters
-                                })
-                            });
-
-                            const data = await response.json();
-
-                            if (data.success) {
-                                const { results } = data;
-
-                                // Обновляем прогресс
-                                const percentage = (results.sent / results.total) * 100;
-                                progressBar.style.width = percentage + '%';
-                                progressBar.textContent = Math.round(percentage) + '%';
-                                progressText.textContent = `${results.sent} / ${results.total} отправлено`;
-
-                                // Показываем результаты
-                                resultsDiv.style.display = 'block';
-                                let resultsHtml = `
+                    // Показываем результаты
+                    resultsDiv.style.display = 'block';
+                    let resultsHtml = `
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 10px;">
                     <div style="padding: 15px; background: var(--success); color: white; border-radius: 10px; text-align: center;">
                         <div style="font-size: 24px; font-weight: bold;">${results.sent}</div>
@@ -1424,8 +1464,8 @@
                 </div>
                 `;
 
-                                if (results.errors && results.errors.length > 0) {
-                                    resultsHtml += `
+                    if (results.errors && results.errors.length > 0) {
+                        resultsHtml += `
                             <div style="margin-top: 15px;">
                                 <strong>Ошибки (первые 10):</strong>
                                 <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
@@ -1437,72 +1477,72 @@
                                 </div>
                             </div>
                         `;
-                                }
-
-                                resultsText.innerHTML = resultsHtml;
-
-                                alert(`✅ Рассылка завершена!\n\nОтправлено: ${results.sent}\nОшибок: ${results.failed}\nВсего: ${results.total}`);
-                            } else {
-                                errorDiv.textContent = data.error || 'Ошибка массовой рассылки';
-                                errorDiv.style.display = 'block';
-                                progressDiv.style.display = 'none';
-                            }
-                        } catch (error) {
-                            errorDiv.textContent = 'Ошибка подключения к серверу: ' + error.message;
-                            errorDiv.style.display = 'block';
-                            progressDiv.style.display = 'none';
-                        } finally {
-                            startBtn.disabled = false;
-                            startBtn.textContent = originalText;
-                        }
                     }
 
-                    // Switch tabs
-                    function switchTab(tab) {
-                        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    resultsText.innerHTML = resultsHtml;
 
-                        if (tab === 'users') {
-                            document.querySelector('.tab-btn[onclick="switchTab(\'users\')"]').classList.add('active');
-                            document.getElementById('usersTab').classList.add('active');
-                        } else if (tab === 'requests') {
-                            document.querySelector('.tab-btn[onclick="switchTab(\'requests\')"]').classList.add('active');
-                            document.getElementById('requestsTab').classList.add('active');
-                            loadRequests();
-                        } else if (tab === 'content') {
-                            document.querySelector('.tab-btn[onclick="switchTab(\'content\')"]').classList.add('active');
-                            document.getElementById('contentTab').classList.add('active');
-                            loadAllContent();
-                        }
+                    alert(`✅ Рассылка завершена!\n\nОтправлено: ${results.sent}\nОшибок: ${results.failed}\nВсего: ${results.total}`);
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка массовой рассылки';
+                    errorDiv.style.display = 'block';
+                    progressDiv.style.display = 'none';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу: ' + error.message;
+                errorDiv.style.display = 'block';
+                progressDiv.style.display = 'none';
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = originalText;
+            }
+        }
+
+        // Switch tabs
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (tab === 'users') {
+                document.querySelector('.tab-btn[onclick="switchTab(\'users\')"]').classList.add('active');
+                document.getElementById('usersTab').classList.add('active');
+            } else if (tab === 'requests') {
+                document.querySelector('.tab-btn[onclick="switchTab(\'requests\')"]').classList.add('active');
+                document.getElementById('requestsTab').classList.add('active');
+                loadRequests();
+            } else if (tab === 'content') {
+                document.querySelector('.tab-btn[onclick="switchTab(\'content\')"]').classList.add('active');
+                document.getElementById('contentTab').classList.add('active');
+                loadAllContent();
+            }
+        }
+
+        // Content management
+        let currentContentType = null;
+        let currentContentId = null;
+        let currentContentImageBase64 = null;
+
+        async function loadAllContent() {
+            const tbody = document.getElementById('contentTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">Загрузка...</td></tr>';
+
+            try {
+                const data = await apiCall('/api/admin/content');
+                if (data.success) {
+                    const content = data.content;
+
+                    if (content.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет контента</h3></td></tr>';
+                        return;
                     }
 
-                    // Content management
-                    let currentContentType = null;
-                    let currentContentId = null;
-                    let currentContentImageBase64 = null;
+                    tbody.innerHTML = content.map(item => {
+                        const hasImage = item.image_data ? '✅' : '❌';
+                        const status = item.is_active === 1
+                            ? '<span class="badge badge-success">Активен</span>'
+                            : '<span class="badge badge-danger">Неактивен</span>';
+                        const textPreview = item.text ? (item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text) : '-';
 
-                    async function loadAllContent() {
-                        const tbody = document.getElementById('contentTableBody');
-                        tbody.innerHTML = '<tr><td colspan="8" class="loading">Загрузка...</td></tr>';
-
-                        try {
-                            const data = await apiCall('/api/admin/content');
-                            if (data.success) {
-                                const content = data.content;
-
-                                if (content.length === 0) {
-                                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет контента</h3></td></tr>';
-                                    return;
-                                }
-
-                                tbody.innerHTML = content.map(item => {
-                                    const hasImage = item.image_data ? '✅' : '❌';
-                                    const status = item.is_active === 1
-                                        ? '<span class="badge badge-success">Активен</span>'
-                                        : '<span class="badge badge-danger">Неактивен</span>';
-                                    const textPreview = item.text ? (item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text) : '-';
-
-                                    return `
+                        return `
                 <tr>
                     <td>${item.id}</td>
                     <td><span class="badge badge-info">${item.type}</span></td>
@@ -1517,17 +1557,99 @@
                     </td>
                 </tr>
                 `;
-                                }).join('');
-                            }
-                        } catch (error) {
-                            tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
-                        }
-                    }
+                    }).join('');
+                }
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
+            }
+        }
 
-                    function loadContent(type) {
-                        currentContentType = type;
-                        currentContentId = null;
-                        currentContentImageBase64 = null;
+        function loadContent(type) {
+            currentContentType = type;
+            currentContentId = null;
+            currentContentImageBase64 = null;
+
+            const editor = document.getElementById('contentEditor');
+            const title = document.getElementById('contentEditorTitle');
+            const typeNames = {
+                'welcome': 'Приветствие',
+                'menu': 'Меню',
+                'examples': 'Примеры генераций'
+            };
+
+            title.textContent = `Редактирование: ${typeNames[type] || type}`;
+            editor.style.display = 'block';
+
+            // Очищаем форму
+            document.getElementById('contentTitle').value = '';
+            document.getElementById('contentText').value = '';
+            document.getElementById('contentImage').value = '';
+            document.getElementById('contentActive').checked = true;
+            document.getElementById('contentOrder').value = 0;
+            document.getElementById('contentImagePreview').style.display = 'none';
+            document.getElementById('contentError').style.display = 'none';
+
+            // Загружаем существующий контент
+            loadContentByType(type);
+        }
+
+        async function loadContentByType(type) {
+            try {
+                const data = await apiCall(`/api/admin/content/${type}`);
+                if (data.success && data.content.length > 0) {
+                    const item = data.content[0]; // Берем первый активный
+                    currentContentId = item.id;
+                    document.getElementById('contentTitle').value = item.title || '';
+                    document.getElementById('contentText').value = item.text || '';
+                    document.getElementById('contentActive').checked = item.is_active === 1;
+                    document.getElementById('contentOrder').value = item.order_index || 0;
+
+                    if (item.image_data) {
+                        currentContentImageBase64 = item.image_data;
+                        document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
+                        document.getElementById('contentImagePreview').style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки контента:', error);
+            }
+        }
+
+        // Обработка загрузки изображения
+        document.getElementById('contentImage').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const base64 = event.target.result.split(',')[1]; // Убираем data:image/...;base64,
+                    currentContentImageBase64 = base64;
+                    document.getElementById('contentImagePreviewImg').src = event.target.result;
+                    document.getElementById('contentImagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function removeContentImage() {
+            currentContentImageBase64 = null;
+            document.getElementById('contentImage').value = '';
+            document.getElementById('contentImagePreview').style.display = 'none';
+        }
+
+        function editContent(id) {
+            // Загружаем контент по ID и открываем редактор
+            loadContentItem(id);
+        }
+
+        async function loadContentItem(id) {
+            try {
+                const allData = await apiCall('/api/admin/content');
+                if (allData.success) {
+                    const item = allData.content.find(c => c.id === id);
+                    if (item) {
+                        currentContentType = item.type;
+                        currentContentId = item.id;
+                        currentContentImageBase64 = item.image_data || null;
 
                         const editor = document.getElementById('contentEditor');
                         const title = document.getElementById('contentEditorTitle');
@@ -1537,232 +1659,150 @@
                             'examples': 'Примеры генераций'
                         };
 
-                        title.textContent = `Редактирование: ${typeNames[type] || type}`;
+                        title.textContent = `Редактирование: ${typeNames[item.type] || item.type}`;
                         editor.style.display = 'block';
 
-                        // Очищаем форму
-                        document.getElementById('contentTitle').value = '';
-                        document.getElementById('contentText').value = '';
-                        document.getElementById('contentImage').value = '';
-                        document.getElementById('contentActive').checked = true;
-                        document.getElementById('contentOrder').value = 0;
-                        document.getElementById('contentImagePreview').style.display = 'none';
-                        document.getElementById('contentError').style.display = 'none';
+                        document.getElementById('contentTitle').value = item.title || '';
+                        document.getElementById('contentText').value = item.text || '';
+                        document.getElementById('contentActive').checked = item.is_active === 1;
+                        document.getElementById('contentOrder').value = item.order_index || 0;
 
-                        // Загружаем существующий контент
-                        loadContentByType(type);
-                    }
-
-                    async function loadContentByType(type) {
-                        try {
-                            const data = await apiCall(`/api/admin/content/${type}`);
-                            if (data.success && data.content.length > 0) {
-                                const item = data.content[0]; // Берем первый активный
-                                currentContentId = item.id;
-                                document.getElementById('contentTitle').value = item.title || '';
-                                document.getElementById('contentText').value = item.text || '';
-                                document.getElementById('contentActive').checked = item.is_active === 1;
-                                document.getElementById('contentOrder').value = item.order_index || 0;
-
-                                if (item.image_data) {
-                                    currentContentImageBase64 = item.image_data;
-                                    document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
-                                    document.getElementById('contentImagePreview').style.display = 'block';
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Ошибка загрузки контента:', error);
+                        if (item.image_data) {
+                            document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
+                            document.getElementById('contentImagePreview').style.display = 'block';
+                        } else {
+                            document.getElementById('contentImagePreview').style.display = 'none';
                         }
                     }
+                }
+            } catch (error) {
+                alert('Ошибка загрузки контента: ' + error.message);
+            }
+        }
 
-                    // Обработка загрузки изображения
-                    document.getElementById('contentImage').addEventListener('change', function (e) {
-                        const file = e.target.files[0];
-                        if (file) {
-                            const reader = new FileReader();
-                            reader.onload = function (event) {
-                                const base64 = event.target.result.split(',')[1]; // Убираем data:image/...;base64,
-                                currentContentImageBase64 = base64;
-                                document.getElementById('contentImagePreviewImg').src = event.target.result;
-                                document.getElementById('contentImagePreview').style.display = 'block';
-                            };
-                            reader.readAsDataURL(file);
-                        }
-                    });
+        async function saveContent() {
+            const title = document.getElementById('contentTitle').value.trim();
+            const text = document.getElementById('contentText').value.trim();
+            const isActive = document.getElementById('contentActive').checked;
+            const orderIndex = parseInt(document.getElementById('contentOrder').value) || 0;
+            const errorDiv = document.getElementById('contentError');
 
-                    function removeContentImage() {
-                        currentContentImageBase64 = null;
-                        document.getElementById('contentImage').value = '';
-                        document.getElementById('contentImagePreview').style.display = 'none';
+            if (!currentContentType) {
+                errorDiv.textContent = 'Выберите тип контента';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            const saveBtn = event.target;
+            const originalText = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+
+            try {
+                const response = await fetch('/api/admin/content', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        id: currentContentId || null,
+                        type: currentContentType,
+                        title: title || null,
+                        text: text || null,
+                        image_data: currentContentImageBase64 || null,
+                        order_index: orderIndex,
+                        is_active: isActive
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Контент сохранен успешно!');
+                    loadAllContent();
+                    cancelContentEdit();
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка сохранения';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalText;
+            }
+        }
+
+        function cancelContentEdit() {
+            document.getElementById('contentEditor').style.display = 'none';
+            currentContentType = null;
+            currentContentId = null;
+            currentContentImageBase64 = null;
+        }
+
+        async function deleteContent(id) {
+            if (!confirm('Вы уверены, что хотите удалить этот контент?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/content/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Admin-Session': sessionId
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Контент удален');
+                    loadAllContent();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка подключения к серверу: ' + error.message);
+            }
+        }
+
+        // Load requests
+        async function loadRequests() {
+            const tbody = document.getElementById('requestsTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка...</td></tr>';
+
+            try {
+                const data = await apiCall('/api/admin/requests?limit=200');
+                if (data.success) {
+                    const requests = data.requests;
+
+                    if (requests.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет запросов</h3></td></tr>';
+                        return;
                     }
 
-                    function editContent(id) {
-                        // Загружаем контент по ID и открываем редактор
-                        loadContentItem(id);
-                    }
-
-                    async function loadContentItem(id) {
-                        try {
-                            const allData = await apiCall('/api/admin/content');
-                            if (allData.success) {
-                                const item = allData.content.find(c => c.id === id);
-                                if (item) {
-                                    currentContentType = item.type;
-                                    currentContentId = item.id;
-                                    currentContentImageBase64 = item.image_data || null;
-
-                                    const editor = document.getElementById('contentEditor');
-                                    const title = document.getElementById('contentEditorTitle');
-                                    const typeNames = {
-                                        'welcome': 'Приветствие',
-                                        'menu': 'Меню',
-                                        'examples': 'Примеры генераций'
-                                    };
-
-                                    title.textContent = `Редактирование: ${typeNames[item.type] || item.type}`;
-                                    editor.style.display = 'block';
-
-                                    document.getElementById('contentTitle').value = item.title || '';
-                                    document.getElementById('contentText').value = item.text || '';
-                                    document.getElementById('contentActive').checked = item.is_active === 1;
-                                    document.getElementById('contentOrder').value = item.order_index || 0;
-
-                                    if (item.image_data) {
-                                        document.getElementById('contentImagePreviewImg').src = `data:image/png;base64,${item.image_data}`;
-                                        document.getElementById('contentImagePreview').style.display = 'block';
-                                    } else {
-                                        document.getElementById('contentImagePreview').style.display = 'none';
-                                    }
-                                }
-                            }
-                        } catch (error) {
-                            alert('Ошибка загрузки контента: ' + error.message);
-                        }
-                    }
-
-                    async function saveContent() {
-                        const title = document.getElementById('contentTitle').value.trim();
-                        const text = document.getElementById('contentText').value.trim();
-                        const isActive = document.getElementById('contentActive').checked;
-                        const orderIndex = parseInt(document.getElementById('contentOrder').value) || 0;
-                        const errorDiv = document.getElementById('contentError');
-
-                        if (!currentContentType) {
-                            errorDiv.textContent = 'Выберите тип контента';
-                            errorDiv.style.display = 'block';
-                            return;
+                    tbody.innerHTML = requests.map(req => {
+                        const userInfo = req.username
+                            ? `${req.username} (ID: ${req.user_id})`
+                            : `ID: ${req.user_id} ${req.telegram_id ? '(Telegram)' : '(Web)'}`;
+                        const promptPreview = req.prompt ? (req.prompt.length > 100 ? req.prompt.substring(0, 100) + '...' : req.prompt) : '-';
+                        const date = new Date(req.created_at).toLocaleString('ru-RU');
+                        let typeBadge = '<span class="badge badge-warning">📝 Текст</span>';
+                        if (req.type === 'image') {
+                            typeBadge = '<span class="badge badge-info">🖼️ Изображение</span>';
+                        } else if (req.type === 'image_edit') {
+                            typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
                         }
 
-                        errorDiv.style.display = 'none';
-                        const saveBtn = event.target;
-                        const originalText = saveBtn.textContent;
-                        saveBtn.disabled = true;
-                        saveBtn.textContent = 'Сохранение...';
-
-                        try {
-                            const response = await fetch('/api/admin/content', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Admin-Session': sessionId
-                                },
-                                body: JSON.stringify({
-                                    id: currentContentId || null,
-                                    type: currentContentType,
-                                    title: title || null,
-                                    text: text || null,
-                                    image_data: currentContentImageBase64 || null,
-                                    order_index: orderIndex,
-                                    is_active: isActive
-                                })
-                            });
-
-                            const data = await response.json();
-
-                            if (data.success) {
-                                alert('✅ Контент сохранен успешно!');
-                                loadAllContent();
-                                cancelContentEdit();
-                            } else {
-                                errorDiv.textContent = data.error || 'Ошибка сохранения';
-                                errorDiv.style.display = 'block';
-                            }
-                        } catch (error) {
-                            errorDiv.textContent = 'Ошибка подключения к серверу: ' + error.message;
-                            errorDiv.style.display = 'block';
-                        } finally {
-                            saveBtn.disabled = false;
-                            saveBtn.textContent = originalText;
-                        }
-                    }
-
-                    function cancelContentEdit() {
-                        document.getElementById('contentEditor').style.display = 'none';
-                        currentContentType = null;
-                        currentContentId = null;
-                        currentContentImageBase64 = null;
-                    }
-
-                    async function deleteContent(id) {
-                        if (!confirm('Вы уверены, что хотите удалить этот контент?')) {
-                            return;
+                        let imagePreview = '-';
+                        if (req.type === 'image' || req.type === 'image_edit') {
+                            imagePreview = `<button class="btn btn-success" style="padding: 5px 10px; font-size: 12px;" onclick="loadAndShowImage(${req.id})">👁️ Просмотр</button>`;
                         }
 
-                        try {
-                            const response = await fetch(`/api/admin/content/${id}`, {
-                                method: 'DELETE',
-                                headers: {
-                                    'X-Admin-Session': sessionId
-                                }
-                            });
-
-                            const data = await response.json();
-
-                            if (data.success) {
-                                alert('✅ Контент удален');
-                                loadAllContent();
-                            } else {
-                                alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
-                            }
-                        } catch (error) {
-                            alert('Ошибка подключения к серверу: ' + error.message);
-                        }
-                    }
-
-                    // Load requests
-                    async function loadRequests() {
-                        const tbody = document.getElementById('requestsTableBody');
-                        tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка...</td></tr>';
-
-                        try {
-                            const data = await apiCall('/api/admin/requests?limit=200');
-                            if (data.success) {
-                                const requests = data.requests;
-
-                                if (requests.length === 0) {
-                                    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Нет запросов</h3></td></tr>';
-                                    return;
-                                }
-
-                                tbody.innerHTML = requests.map(req => {
-                                    const userInfo = req.username
-                                        ? `${req.username} (ID: ${req.user_id})`
-                                        : `ID: ${req.user_id} ${req.telegram_id ? '(Telegram)' : '(Web)'}`;
-                                    const promptPreview = req.prompt ? (req.prompt.length > 100 ? req.prompt.substring(0, 100) + '...' : req.prompt) : '-';
-                                    const date = new Date(req.created_at).toLocaleString('ru-RU');
-                                    let typeBadge = '<span class="badge badge-warning">📝 Текст</span>';
-                                    if (req.type === 'image') {
-                                        typeBadge = '<span class="badge badge-info">🖼️ Изображение</span>';
-                                    } else if (req.type === 'image_edit') {
-                                        typeBadge = '<span class="badge badge-info">✏️ Редактирование</span>';
-                                    }
-
-                                    let imagePreview = '-';
-                                    if (req.type === 'image' || req.type === 'image_edit') {
-                                        imagePreview = `<button class="btn btn-success" style="padding: 5px 10px; font-size: 12px;" onclick="loadAndShowImage(${req.id})">👁️ Просмотр</button>`;
-                                    }
-
-                                    return `
+                        return `
                     <tr>
                         <td>${req.id}</td>
                         <td>${userInfo}</td>
@@ -1779,135 +1819,135 @@
                         </td>
                     </tr>
                     `;
-                                }).join('');
-                            }
-                        } catch (error) {
-                            tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
-                        }
+                    }).join('');
+                }
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><h3>Ошибка загрузки: ${error.message}</h3></td></tr>`;
+            }
+        }
+
+        // Load and show image (lazy load)
+        async function loadAndShowImage(id) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+
+            try {
+                const data = await apiCall(`/api/admin/generation/${id}/image`);
+                if (data.success && data.image_data) {
+                    showImageModal(`data:image/png;base64,${data.image_data}`);
+                } else {
+                    alert('Изображение не найдено');
+                }
+            } catch (error) {
+                alert('Ошибка загрузки изображения: ' + error.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Open send message modal
+        let currentMessageUserId = null;
+        function openSendMessage(userId, username) {
+            currentMessageUserId = userId;
+            const modal = document.getElementById('sendMessageModal');
+            const recipientDiv = document.getElementById('messageRecipient');
+            recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})`;
+            document.getElementById('messageText').value = '';
+            document.getElementById('sendMessageError').style.display = 'none';
+            modal.style.display = 'block';
+        }
+
+        // Close send message modal
+        function closeSendMessageModal() {
+            document.getElementById('sendMessageModal').style.display = 'none';
+            currentMessageUserId = null;
+        }
+
+        // Send message
+        async function sendMessage() {
+            const messageText = document.getElementById('messageText').value.trim();
+            const errorDiv = document.getElementById('sendMessageError');
+
+            if (!messageText) {
+                errorDiv.textContent = 'Введите сообщение';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (!currentMessageUserId) {
+                errorDiv.textContent = 'Ошибка: не выбран пользователь';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            const sendBtn = event.target;
+            const originalText = sendBtn.textContent;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Отправка...';
+
+            try {
+                const response = await fetch('/api/admin/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Session': sessionId
+                    },
+                    body: JSON.stringify({
+                        userId: currentMessageUserId,
+                        message: messageText
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Сообщение отправлено успешно!');
+                    closeSendMessageModal();
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка отправки сообщения';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка подключения к серверу';
+                errorDiv.style.display = 'block';
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = originalText;
+            }
+        }
+        async function recalculateStats() {
+            if (!confirm('Вы уверены? Это пересчитает статистику генераций для всех пользователей на основе истории. Процесс может занять время.')) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('adminSession');
+                const response = await fetch('/api/admin/recalculate-stats', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-session': token
                     }
+                });
 
-                    // Load and show image (lazy load)
-                    async function loadAndShowImage(id) {
-                        const btn = event.target;
-                        const originalText = btn.textContent;
-                        btn.textContent = '⏳';
-                        btn.disabled = true;
+                const data = await response.json();
 
-                        try {
-                            const data = await apiCall(`/api/admin/generation/${id}/image`);
-                            if (data.success && data.image_data) {
-                                showImageModal(`data:image/png;base64,${data.image_data}`);
-                            } else {
-                                alert('Изображение не найдено');
-                            }
-                        } catch (error) {
-                            alert('Ошибка загрузки изображения: ' + error.message);
-                        } finally {
-                            btn.textContent = originalText;
-                            btn.disabled = false;
-                        }
-                    }
-
-                    // Open send message modal
-                    let currentMessageUserId = null;
-                    function openSendMessage(userId, username) {
-                        currentMessageUserId = userId;
-                        const modal = document.getElementById('sendMessageModal');
-                        const recipientDiv = document.getElementById('messageRecipient');
-                        recipientDiv.innerHTML = `<strong>${username}</strong> (ID: ${userId})`;
-                        document.getElementById('messageText').value = '';
-                        document.getElementById('sendMessageError').style.display = 'none';
-                        modal.style.display = 'block';
-                    }
-
-                    // Close send message modal
-                    function closeSendMessageModal() {
-                        document.getElementById('sendMessageModal').style.display = 'none';
-                        currentMessageUserId = null;
-                    }
-
-                    // Send message
-                    async function sendMessage() {
-                        const messageText = document.getElementById('messageText').value.trim();
-                        const errorDiv = document.getElementById('sendMessageError');
-
-                        if (!messageText) {
-                            errorDiv.textContent = 'Введите сообщение';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
-
-                        if (!currentMessageUserId) {
-                            errorDiv.textContent = 'Ошибка: не выбран пользователь';
-                            errorDiv.style.display = 'block';
-                            return;
-                        }
-
-                        errorDiv.style.display = 'none';
-                        const sendBtn = event.target;
-                        const originalText = sendBtn.textContent;
-                        sendBtn.disabled = true;
-                        sendBtn.textContent = 'Отправка...';
-
-                        try {
-                            const response = await fetch('/api/admin/send-message', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Admin-Session': sessionId
-                                },
-                                body: JSON.stringify({
-                                    userId: currentMessageUserId,
-                                    message: messageText
-                                })
-                            });
-
-                            const data = await response.json();
-
-                            if (data.success) {
-                                alert('✅ Сообщение отправлено успешно!');
-                                closeSendMessageModal();
-                            } else {
-                                errorDiv.textContent = data.error || 'Ошибка отправки сообщения';
-                                errorDiv.style.display = 'block';
-                            }
-                        } catch (error) {
-                            errorDiv.textContent = 'Ошибка подключения к серверу';
-                            errorDiv.style.display = 'block';
-                        } finally {
-                            sendBtn.disabled = false;
-                            sendBtn.textContent = originalText;
-                        }
-                    }
-                    async function recalculateStats() {
-                        if (!confirm('Вы уверены? Это пересчитает статистику генераций для всех пользователей на основе истории. Процесс может занять время.')) {
-                            return;
-                        }
-
-                        try {
-                            const token = localStorage.getItem('adminSession');
-                            const response = await fetch('/api/admin/recalculate-stats', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'x-admin-session': token
-                                }
-                            });
-
-                            const data = await response.json();
-
-                            if (data.success) {
-                                alert(data.message);
-                                loadData(); // Обновляем отображение
-                            } else {
-                                alert('Ошибка: ' + data.error);
-                            }
-                        } catch (error) {
-                            console.error('Ошибка:', error);
-                            alert('Ошибка соединения с сервером');
-                        }
-                    }
-                </script>
+                if (data.success) {
+                    alert(data.message);
+                    loadData(); // Обновляем отображение
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка соединения с сервером');
+            }
+        }
+    </script>
 </body>
 
 </html>
