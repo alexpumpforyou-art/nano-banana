@@ -341,6 +341,58 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
+// Пересчитать статистику (для исправления старых данных)
+app.post('/api/admin/recalculate-stats', requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Админ запустил пересчет статистики...');
+
+    // 1. Сбрасываем текущую статистику
+    await knex('users').update({
+      generations_count: 0,
+      total_spent_credits: 0
+    });
+
+    // 2. Получаем всех пользователей
+    const users = await knex('users').select('id');
+    let updatedCount = 0;
+
+    for (const user of users) {
+      // 3. Считаем реальные генерации
+      const stats = await knex('generations')
+        .select(
+          knex.raw('COUNT(*) as count'),
+          knex.raw('SUM(cost) as total_cost')
+        )
+        .where('user_id', user.id)
+        .first();
+
+      const count = parseInt(stats.count) || 0;
+      const totalCost = parseInt(stats.total_cost) || 0;
+
+      if (count > 0) {
+        // 4. Обновляем пользователя
+        await knex('users')
+          .where('id', user.id)
+          .update({
+            generations_count: count,
+            total_spent_credits: totalCost
+          });
+        updatedCount++;
+      }
+    }
+
+    console.log(`✅ Пересчет завершен! Обновлено пользователей: ${updatedCount}`);
+
+    res.json({
+      success: true,
+      message: `Статистика пересчитана. Обновлено пользователей: ${updatedCount}`
+    });
+  } catch (error) {
+    console.error('Ошибка пересчета статистики:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Получить общую статистику
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
