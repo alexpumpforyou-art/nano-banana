@@ -37,6 +37,7 @@ const worker = new Worker('image-generation', async job => {
             const base64Image = result.imageBuffer.toString('base64');
             await generationQueries.create(userId, prompt, '[Изображение]', creditsCost, 'image', base64Image);
             await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Генерация изображения');
+            await userQueries.incrementGenerations(creditsCost, userId);
 
             // Отправляем пользователю
             await bot.sendPhoto(chatId, result.imageBuffer, {
@@ -85,6 +86,7 @@ const worker = new Worker('image-generation', async job => {
             const base64Image = result.imageBuffer.toString('base64');
             await generationQueries.create(userId, `[Редактирование] ${prompt}`, '[Изображение]', creditsCost, 'image_edit', base64Image);
             await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Редактирование изображения');
+            await userQueries.incrementGenerations(creditsCost, userId);
 
             // 6. Отправляем результат
             await bot.sendPhoto(chatId, result.imageBuffer, {

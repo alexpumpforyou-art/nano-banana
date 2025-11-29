@@ -123,6 +123,9 @@ app.post('/api/generate', async (req, res) => {
       'Генерация текста'
     );
 
+    // Обновляем статистику генераций
+    await userQueries.incrementGenerations(result.tokensUsed, user.id);
+
     res.json({
       success: true,
       response: result.text,
