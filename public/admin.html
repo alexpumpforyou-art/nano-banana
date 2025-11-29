@@ -526,20 +526,8 @@
                     <label for="password">Пароль</label>
                     <input type="password" id="password" required autocomplete="current-password">
                 </div>
-                <button type="submit" class="btn btn-primary">Войти</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Statistics -->
-    <div class="stats-grid" id="statsGrid">
-        <div class="stat-card">
-            <h3>Всего пользователей</h3>
-            <div class="value" id="totalUsers">-</div>
-        </div>
-        <div class="stat-card success">
-            <h3>Telegram пользователей</h3>
-            <div class="value" id="telegramUsers">-</div>
+                <h3>Telegram пользователей</h3>
+                <div class="value" id="telegramUsers">-</div>
         </div>
         <div class="stat-card info">
             <h3>Всего генераций</h3>
@@ -1889,6 +1877,34 @@
                         } finally {
                             sendBtn.disabled = false;
                             sendBtn.textContent = originalText;
+                        }
+                    }
+                    async function recalculateStats() {
+                        if (!confirm('Вы уверены? Это пересчитает статистику генераций для всех пользователей на основе истории. Процесс может занять время.')) {
+                            return;
+                        }
+
+                        try {
+                            const token = localStorage.getItem('adminSession');
+                            const response = await fetch('/api/admin/recalculate-stats', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-admin-session': token
+                                }
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success) {
+                                alert(data.message);
+                                loadData(); // Обновляем отображение
+                            } else {
+                                alert('Ошибка: ' + data.error);
+                            }
+                        } catch (error) {
+                            console.error('Ошибка:', error);
+                            alert('Ошибка соединения с сервером');
                         }
                     }
                 </script>
