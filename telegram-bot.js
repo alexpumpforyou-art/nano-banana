@@ -1836,10 +1836,104 @@ bot.on('message', async (msg) => {
 
   // Проверяем есть ли фото в сообщении
   const hasPhoto = msg.photo && msg.photo.length > 0;
+  const mediaGroupId = msg.media_group_id;
 
+  // ==================== ОБРАБОТКА МЕДИА-ГРУПП (АЛЬБОМОВ) ====================
+  if (mediaGroupId && hasPhoto) {
+    // Инициализируем кэш если нужно
+    if (!global.mediaGroupCache) {
+      global.mediaGroupCache = new Map();
+    }
+
+    if (!global.mediaGroupCache.has(mediaGroupId)) {
+      global.mediaGroupCache.set(mediaGroupId, {
+        messages: [],
+        timer: null
+      });
+    }
+
+    const group = global.mediaGroupCache.get(mediaGroupId);
+    group.messages.push(msg);
+
+    // Сбрасываем таймер
+    if (group.timer) {
+      clearTimeout(group.timer);
+    }
+
+    // Устанавливаем новый таймер (ждем 2 секунды, чтобы собрать все фото)
+    group.timer = setTimeout(async () => {
+      try {
+        const cachedGroup = global.mediaGroupCache.get(mediaGroupId);
+        if (!cachedGroup) return;
+
+        global.mediaGroupCache.delete(mediaGroupId); // Очищаем кэш сразу
+
+        const messages = cachedGroup.messages;
+        if (messages.length === 0) return;
+
+        // Ищем промпт (подпись может быть только у одной из фоток)
+        const combinedPrompt = messages.map(m => m.caption).filter(Boolean).join(' ');
+
+        // Собираем все fileId (берем самые большие фото)
+        const fileIds = messages.map(m => m.photo[m.photo.length - 1].file_id);
+
+        // Используем chatId и messageId первого сообщения
+        const firstMsg = messages[0];
+        const chatId = firstMsg.chat.id;
+
+        // Если нет промпта, игнорируем
+        if (!combinedPrompt || combinedPrompt.trim().length === 0) {
+          return;
+        }
+
+        // Логика редактирования/объединения
+        try {
+          const user = await userQueries.getByTelegramId(chatId.toString());
+
+          if (!user) {
+            return await bot.sendMessage(chatId, 'Используйте /start для начала работы.');
+          }
+
+          if (user.is_blocked) {
+            return await bot.sendMessage(chatId, '❌ Ваш аккаунт заблокирован.');
+          }
+
+          // Проверяем баланс
+          if (user.credits < PRICES.IMAGE_EDIT) {
+            return await bot.sendMessage(chatId, `❌ Недостаточно кредитов! Требуется: ${PRICES.IMAGE_EDIT}`);
+          }
+
+          await bot.sendChatAction(chatId, 'upload_photo');
+          const statusMsg = new StatusMessage(bot, chatId);
+          await statusMsg.start(messages.length > 1 ? '🎨 Объединяю изображения' : '✏️ Вносим правки');
+
+          console.log(`🔍 [DEBUG] Добавляю задачу (файлов: ${fileIds.length}) в очередь...`);
+
+          await generationQueue.add('edit-image', {
+            chatId,
+            prompt: combinedPrompt,
+            userId: user.id,
+            messageId: firstMsg.message_id,
+            fileIds: fileIds, // Передаем МАССИВ ID
+            statusMessageId: statusMsg.messageId
+          });
+
+        } catch (err) {
+          console.error('Ошибка обработки группы:', err);
+          await bot.sendMessage(chatId, '❌ Ошибка при обработке изображений.');
+        }
+
+      } catch (e) {
+        console.error('Ошибка в таймере медиа-группы:', e);
+      }
+    }, 2000);
+
+    return; // Прерываем обработку текущего сообщения, ждем таймер
+  }
+
+  // ==================== ОБРАБОТКА ОДИНОЧНОГО ФОТО (БЕЗ ГРУППЫ) ====================
   // Если есть фото И текст (любой) - это запрос на редактирование
-  if (hasPhoto && prompt && prompt.trim().length > 0) {
-    // ==================== РЕДАКТИРОВАНИЕ ИЗОБРАЖЕНИЯ ====================
+  if (hasPhoto && prompt && prompt.trim().length > 0 && !mediaGroupId) {
     try {
       const user = await userQueries.getByTelegramId(chatId.toString());
 
@@ -1876,13 +1970,12 @@ bot.on('message', async (msg) => {
         prompt,
         userId: user.id,
         messageId: msg.message_id,
-        fileId: photo.file_id,
+        fileIds: [photo.file_id], // Унифицируем: всегда массив
         statusMessageId: statusMsg.messageId
       });
 
       console.log(`✅ [DEBUG] Задача редактирования добавлена в очередь`);
 
-      // Статус "Вносим правки" останется висеть, пока воркер не ответит
       return;
 
     } catch (error) {

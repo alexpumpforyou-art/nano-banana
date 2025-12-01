@@ -207,44 +207,63 @@ class ImageService {
    * @param {string} prompt - Описание изменений
    * @returns {Promise<{imageBuffer: Buffer, tokensUsed: number}>}
    */
-  async editImage(imageBuffer, prompt) {
-    // Reset edit index if needed or keep persistent? Better reset for each request to start with best model
+  /**
+   * Редактирование изображения (или нескольких) по текстовому описанию
+   * @param {Buffer|Buffer[]} imageBuffers - Исходное изображение или массив изображений
+   * @param {string} prompt - Описание изменений
+   * @returns {Promise<{imageBuffer: Buffer, tokensUsed: number}>}
+   */
+  async editImage(imageBuffers, prompt) {
+    // Reset edit index if needed
     this.currentEditModelIndex = 0;
+
+    // Приводим к массиву
+    const buffers = Array.isArray(imageBuffers) ? imageBuffers : [imageBuffers];
 
     for (let attempt = 0; attempt < this.editingModels.length; attempt++) {
       try {
         const modelName = this.editingModels[this.currentEditModelIndex];
-        console.log(`✏️ Редактирую изображение через модель: ${modelName}`);
+        console.log(`✏️ Редактирую изображение (${buffers.length} шт.) через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
 
         let editedImageBuffer = null;
 
         if (modelName.startsWith('imagen-')) {
           // Use REST API for Imagen
-          editedImageBuffer = await this.editImageViaRest(modelName, imageBuffer, prompt);
+          // Imagen пока поддерживает только одно изображение во входных данных через этот API
+          if (buffers.length > 1) {
+            console.warn('⚠️ Imagen поддерживает только одно изображение. Используем первое.');
+          }
+          editedImageBuffer = await this.editImageViaRest(modelName, buffers[0], prompt);
         } else {
           // Use Gemini SDK
-          // Конвертируем изображение в base64
-          const base64Image = imageBuffer.toString('base64');
 
-          // Формируем детальный промпт для редактирования
-          const editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
+          const contentParts = [];
+
+          // Добавляем все изображения
+          for (const buf of buffers) {
+            contentParts.push({
+              inlineData: {
+                data: buf.toString('base64'),
+                mimeType: 'image/jpeg'
+              }
+            });
+          }
+
+          // Формируем детальный промпт
+          let editPrompt;
+          if (buffers.length > 1) {
+            editPrompt = `Используя эти ${buffers.length} изображения, выполни задание: ${prompt}. \nСоздай ОДНО новое изображение, объединяя элементы или изменяя их согласно запросу.`;
+          } else {
+            editPrompt = `Отредактируй это изображение: ${prompt}. \nВАЖНО: Сохрани все существующие элементы и детали изображения, только добавь или измени то, что указано в запросе. \nНе создавай новое изображение с нуля, а именно модифицируй это.`;
+          }
+
+          contentParts.push({ text: editPrompt });
 
           // Используем Gemini модель для редактирования
           const editModel = this.genAI.getGenerativeModel({ model: modelName });
 
-          const result = await editModel.generateContent([
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: 'image/jpeg' // или определять автоматически
-              }
-            },
-            { text: editPrompt }
-          ], {
-            // generationConfig: {
-            //   response_modalities: ['IMAGE'] // Убираем ограничение, чтобы видеть текст ошибки если есть
-            // },
+          const result = await editModel.generateContent(contentParts, {
             safetySettings: [
               { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
               { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -257,16 +276,9 @@ class ImageService {
 
           console.log('📋 Структура ответа (редактирование):');
           console.log('response.candidates:', response.candidates?.length || 0);
-          if (response.promptFeedback) {
-            console.log('⚠️ Prompt Feedback:', JSON.stringify(response.promptFeedback, null, 2));
-          }
 
           if (response.candidates && response.candidates[0]) {
             const candidate = response.candidates[0];
-
-            if (candidate.finishReason !== 'STOP') {
-              console.log('⚠️ Finish Reason:', candidate.finishReason);
-            }
 
             if (candidate.content && candidate.content.parts) {
               for (const part of candidate.content.parts) {
@@ -287,7 +299,7 @@ class ImageService {
           throw new Error('Модель вернула пустой результат (возможно, только текст)');
         }
 
-        const tokensUsed = Math.ceil(prompt.length / 4) + 50;
+        const tokensUsed = Math.ceil(prompt.length / 4) + 50 + (buffers.length * 258); // +258 токенов за каждое изображение
 
         return {
           imageBuffer: editedImageBuffer,

@@ -61,22 +61,37 @@ const worker = new Worker('image-generation', async job => {
             // ==================== РЕДАКТИРОВАНИЕ ====================
             console.log(`✏️ Editing image with prompt: ${prompt}`);
 
-            // 1. Получаем ссылку на файл
-            const fileLink = await bot.getFileLink(fileId);
+            // 1. Получаем ID файлов (поддержка и массива, и одиночного ID)
+            const ids = job.data.fileIds || (job.data.fileId ? [job.data.fileId] : []);
 
-            // 2. Скачиваем изображение
+            if (ids.length === 0) {
+                throw new Error('No file IDs provided');
+            }
+
+            console.log(`📥 Downloading ${ids.length} images...`);
+
+            // 2. Скачиваем все изображения
+            const imageBuffers = [];
             const https = require('https');
-            const imageBuffer = await new Promise((resolve, reject) => {
-                https.get(fileLink, (response) => {
-                    const chunks = [];
-                    response.on('data', chunk => chunks.push(chunk));
-                    response.on('end', () => resolve(Buffer.concat(chunks)));
-                }).on('error', reject);
-            });
-            console.log(`📥 Downloaded image (${imageBuffer.length} bytes)`);
 
-            // 3. Редактируем
-            const result = await imageService.editImage(imageBuffer, prompt);
+            for (const id of ids) {
+                const fileLink = await bot.getFileLink(id);
+
+                const buffer = await new Promise((resolve, reject) => {
+                    https.get(fileLink, (response) => {
+                        const chunks = [];
+                        response.on('data', chunk => chunks.push(chunk));
+                        response.on('end', () => resolve(Buffer.concat(chunks)));
+                    }).on('error', reject);
+                });
+
+                imageBuffers.push(buffer);
+            }
+
+            console.log(`✅ Downloaded ${imageBuffers.length} images`);
+
+            // 3. Редактируем (передаем массив буферов)
+            const result = await imageService.editImage(imageBuffers, prompt);
 
             // 4. Списываем кредиты
             const creditsCost = 2; // PRICES.IMAGE_EDIT
