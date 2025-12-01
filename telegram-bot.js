@@ -540,7 +540,7 @@ bot.onText(/\/help/, async (msg) => {
 • Редактирование: 2 кредита
 
 💰 Пополнить баланс: /buy
-❓ Поддержка: /support
+❓ Поддержка: https://t.me/say_nanobanana
   `;
 
   await bot.sendMessage(chatId, helpText);
@@ -794,7 +794,8 @@ bot.onText(/\/support/, async (msg) => {
 → /help
 
 📧 *Прямой контакт:*
-Для срочных вопросов напишите администратору${ADMIN_TELEGRAM_ID ? `\nTelegram ID: \`${ADMIN_TELEGRAM_ID}\`` : ''}
+Для срочных вопросов: https://t.me/say_nanobanana
+${ADMIN_TELEGRAM_ID ? `\nTelegram ID: \`${ADMIN_TELEGRAM_ID}\`` : ''}
 
 ⏰ *Время ответа:* Обычно в течение 24 часов
 
@@ -1460,7 +1461,7 @@ _Пример: "Убеди фон"_
     try {
       await bot.answerCallbackQuery(query.id);
 
-      const guideUrl = 'https://github.com/alexpumpforyou-art/nano-banana/blob/main/GUIDE.md';
+      const guideUrl = 'https://telegra.ph/Nano-Banana-Polnoe-rukovodstvo-12-01';
       const examplesText = `
 📚 *Примеры и инструкции*
 
