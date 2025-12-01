@@ -1438,6 +1438,9 @@ _Пример: "Убеди фон"_
           [
             { text: '📊 История', callback_data: 'menu_history' },
             { text: '❓ Помощь', callback_data: 'menu_help' }
+          ],
+          [
+            { text: '📚 Примеры', callback_data: 'menu_examples' }
           ]
         ]
       };
@@ -1451,6 +1454,33 @@ _Пример: "Убеди фон"_
       await sendAndRemember(chatId, welcomeText, { reply_markup: keyboard, parse_mode: 'HTML' });
     } catch (error) {
       console.error('Ошибка menu_back:', error);
+    }
+  } else if (data === 'menu_examples') {
+    // Кнопка "Примеры"
+    try {
+      await bot.answerCallbackQuery(query.id);
+
+      const guideUrl = 'https://github.com/alexpumpforyou-art/nano-banana/blob/main/GUIDE.md';
+      const examplesText = `
+📚 *Примеры и инструкции*
+
+Мы подготовили подробное руководство по использованию бота:
+• Как генерировать красивые картинки
+• Как редактировать фото
+• Как объединять изображения
+• Секреты промптов
+
+👉 [Читать руководство](${guideUrl})
+      `;
+
+      const backButton = {
+        inline_keyboard: [[{ text: '◀️ Назад в меню', callback_data: 'menu_back' }]]
+      };
+
+      await sendAndRemember(chatId, examplesText, { parse_mode: 'Markdown', reply_markup: backButton });
+    } catch (error) {
+      console.error('Ошибка menu_examples:', error);
+      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка' });
     }
   } else if (data === 'check_balance') {
     // Обработка проверки баланса
