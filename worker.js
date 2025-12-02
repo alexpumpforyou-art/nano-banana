@@ -8,6 +8,7 @@ const { userQueries, transactionQueries, generationQueries } = require('./databa
 const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
     connectTimeout: 30000, // 30 секунд
+    family: 6, // Force IPv6 for Railway internal network
     retryStrategy: function (times) {
         return Math.min(times * 100, 3000);
     }
