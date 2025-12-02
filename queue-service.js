@@ -17,6 +17,8 @@ console.log(`🔍 [Queue] Попытка подключения к Redis: ${redi
 connection.on('connect', () => console.log('✅ [Queue] Redis connected'));
 connection.on('error', (err) => console.error('❌ [Queue] Redis error:', err.message));
 
+const generationQueue = new Queue('image-generation', { connection });
+
 module.exports = {
     generationQueue
 };
