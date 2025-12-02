@@ -1,15 +1,23 @@
 const Redis = require('ioredis');
 
-// Подключение к Redis
-// Если REDIS_URL не задан, используем локальный (для разработки)
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redis = new Redis(redisUrl, {
+    connectTimeout: 30000, // 30 секунд
+    retryStrategy: function (times) {
+        return Math.min(times * 100, 3000);
+    }
+});
+
+// Логируем хост
+const redisHost = (redisUrl || '').split('@')[1] || 'localhost';
+console.log(`🔍 [Session] Попытка подключения к Redis: ${redisHost}`);
 
 redis.on('connect', () => {
-    console.log('✅ Redis подключен');
+    console.log('✅ [Session] Redis подключен');
 });
 
 redis.on('error', (err) => {
-    console.error('❌ Ошибка Redis:', err);
+    console.error('❌ [Session] Ошибка Redis:', err.message);
 });
 
 const SESSION_TTL = 24 * 60 * 60; // 24 часа
