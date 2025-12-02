@@ -6,13 +6,29 @@ const ImageService = require('./image-service');
 const { userQueries, transactionQueries, generationQueries } = require('./database-postgres');
 
 const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null
+    maxRetriesPerRequest: null,
+    connectTimeout: 30000, // 30 секунд
+    retryStrategy: function (times) {
+        return Math.min(times * 100, 3000);
+    }
 });
 
-connection.on('connect', () => console.log('✅ [Worker] Redis connected'));
-connection.on('ready', () => console.log('✅ [Worker] Redis ready'));
-connection.on('error', (err) => console.error('❌ [Worker] Redis error:', err));
-console.log(`🔍 [Worker] Redis URL: ${process.env.REDIS_URL || 'default localhost'}`);
+// Логируем хост (без пароля) для проверки
+const redisHost = (process.env.REDIS_URL || '').split('@')[1] || 'localhost';
+console.log(`🔍 [Worker] Попытка подключения к Redis: ${redisHost}`);
+
+connection.on('connect', async () => {
+    console.log('✅ [Worker] Redis connected');
+    try {
+        console.log('🧹 Очистка очереди...');
+        await connection.flushall();
+        console.log('✨ Redis полностью очищен!');
+    } catch (e) {
+        console.error('Ошибка очистки:', e);
+    }
+});
+
+connection.on('error', (err) => console.error('❌ [Worker] Redis error:', err.message));
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 const imageService = new ImageService(process.env.GEMINI_API_KEY);
