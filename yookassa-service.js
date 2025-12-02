@@ -1,11 +1,25 @@
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 class YookassaService {
     constructor(shopId, secretKey) {
         this.shopId = shopId;
         this.secretKey = secretKey;
         this.baseUrl = 'https://api.yookassa.ru/v3';
+
+        // Настройка прокси
+        this.proxyUrl = process.env.YOOKASSA_PROXY_URL;
+        this.axiosConfig = {};
+
+        if (this.proxyUrl) {
+            console.log('🛡️ YooKassa: Using proxy');
+            const httpsAgent = new HttpsProxyAgent(this.proxyUrl);
+            this.axiosConfig = {
+                httpsAgent,
+                proxy: false // Отключаем встроенный прокси axios, используем агент
+            };
+        }
     }
 
     /**
@@ -57,7 +71,9 @@ class YookassaService {
                         'Authorization': `Basic ${auth}`,
                         'Idempotence-Key': idempotenceKey,
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    timeout: 30000, // 30 секунд таймаут
+                    ...this.axiosConfig
                 }
             );
 
@@ -83,7 +99,9 @@ class YookassaService {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    timeout: 30000,
+                    ...this.axiosConfig
                 }
             );
 
