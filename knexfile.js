@@ -14,6 +14,12 @@ module.exports = {
         },
         seeds: {
             directory: './seeds'
+        },
+        pool: {
+            min: 2,
+            max: 20, // Increased max connections
+            acquireTimeoutMillis: 60000, // 60 seconds timeout
+            propagateCreateError: false
         }
     },
     production: {
@@ -27,7 +33,9 @@ module.exports = {
         },
         pool: {
             min: 2,
-            max: 10
+            max: 20,
+            acquireTimeoutMillis: 60000,
+            propagateCreateError: false
         },
         ssl: { rejectUnauthorized: false }
     }
