@@ -1,0 +1,29 @@
+{
+    "env": {
+        "node": true,
+        "es2021": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 12
+    },
+    "rules": {
+        "no-undef": "error",
+        "no-unused-vars": [
+            "warn",
+            {
+                "argsIgnorePattern": "^_",
+                "varsIgnorePattern": "^_"
+            }
+        ],
+        "no-const-assign": "error",
+        "no-unreachable": "error",
+        "no-redeclare": "error",
+        "no-use-before-define": [
+            "error",
+            {
+                "functions": false
+            }
+        ]
+    }
+}

@@ -1566,7 +1566,9 @@ _Пример: "Убеди фон"_
     try {
       await bot.deleteMessage(chatId, query.message.message_id);
 
-    } catch (e) { }
+    } catch (e) {
+      // Ignore deletion errors (message might be already deleted)
+    }
 
     return;
   } else if (data === 'buy_method_stars') {
@@ -1965,6 +1967,8 @@ bot.on('message', async (msg) => {
   // ==================== ОБРАБОТКА ОДИНОЧНОГО ФОТО (БЕЗ ГРУППЫ) ====================
   // Если есть фото И текст (любой) - это запрос на редактирование
   if (hasPhoto && prompt && prompt.trim().length > 0 && !mediaGroupId) {
+    const statusMsg = new StatusMessage(bot, chatId);
+
     try {
       const user = await userQueries.getByTelegramId(chatId.toString());
 
@@ -1987,7 +1991,6 @@ bot.on('message', async (msg) => {
 
       await bot.sendChatAction(chatId, 'upload_photo');
 
-      const statusMsg = new StatusMessage(bot, chatId);
       await statusMsg.start('✏️ Вносим правки');
 
       // Добавляем задачу в очередь
@@ -2011,7 +2014,7 @@ bot.on('message', async (msg) => {
 
     } catch (error) {
       console.error('Ошибка редактирования изображения:', error);
-      if (typeof statusMsg !== 'undefined') await statusMsg.stop();
+      await statusMsg.stop();
       await bot.sendMessage(chatId, '❌ Произошла ошибка при редактировании изображения.');
       return;
     }

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "npx knex migrate:latest && node auto-migrate.js && node server.js",
     "worker": "node worker.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "lint": "eslint ."
   },
   "keywords": [
     "gemini",
@@ -33,6 +34,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0"
   }
 }

@@ -179,6 +179,17 @@ app.get('/api/transactions/:webId', async (req, res) => {
   }
 });
 
+
+// ==================== TELEGRAM BOT ====================
+// Запускаем бота только если есть токен (MUST BE BEFORE WEBHOOKS)
+let telegramBot = null;
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  telegramBot = require('./telegram-bot');
+  console.log('🤖 Telegram бот запущен');
+} else {
+  console.warn('⚠️  TELEGRAM_BOT_TOKEN не найден, бот не запущен');
+}
+
 // Webhook для ЮKassa
 app.post('/yookassa/webhook', async (req, res) => {
   try {
@@ -259,15 +270,6 @@ app.post('/yookassa/webhook', async (req, res) => {
   }
 });
 
-// ==================== TELEGRAM BOT ====================
-// Запускаем бота только если есть токен
-let telegramBot = null;
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  telegramBot = require('./telegram-bot');
-  console.log('🤖 Telegram бот запущен');
-} else {
-  console.warn('⚠️  TELEGRAM_BOT_TOKEN не найден, бот не запущен');
-}
 
 // ==================== СЕРВЕР ====================
 
