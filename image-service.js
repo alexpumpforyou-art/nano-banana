@@ -4,25 +4,21 @@ class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
     // Модели для генерации изображений (приоритет: работающие → Gemini 3)
-    // Gemini 3 пока может быть недоступна, поэтому пробуем сначала стабильные
+    // Пользователь запросил использовать только Imagen 4
     this.modelsToTry = [
       'imagen-4.0-generate-001',          // Imagen 4 (Latest)
-      'imagen-4.0-ultra-generate-001',    // Imagen 4 Ultra
-      'imagen-3.0-generate-001',          // Imagen 3
-      'gemini-2.0-flash-exp'              // Fallback text-to-image
+      'imagen-4.0-ultra-generate-001'     // Imagen 4 Ultra
     ];
 
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
-    // Imagen 4 пока не поддерживает image input через predict, поэтому используем Gemini
-    // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
     // Imagen 4 поддерживает image input через predict
     this.editingModels = [
+      'imagen-4.0-generate-preview-06-06', // Imagen 4 (Supports predict) - Moved to top
       'gemini-2.5-flash-image',            // User confirmed working model!
       'gemini-3-pro-preview',              // User suggested
       'gemini-2.5-pro',                    // User suggested
       'gemini-2.5-flash-image-preview',    // Experimental
       'gemini-2.0-flash-exp-image-generation', // Experimental
-      'imagen-4.0-generate-preview-06-06', // Imagen 4 (Supports predict)
       'gemini-2.0-flash-exp'               // Fallback
     ];
 
@@ -121,10 +117,23 @@ class ImageService {
    * @returns {Promise<{imageData: string, tokensUsed: number}>}
    */
   async generateImage(prompt) {
+    // Сброс индекса модели, если он вышел за пределы массива
+    if (this.currentModelIndex >= this.modelsToTry.length) {
+      this.currentModelIndex = 0;
+    }
+
     // Пробуем разные модели
     for (let attempt = 0; attempt < this.modelsToTry.length; attempt++) {
+      let response = null; // Объявляем response здесь, чтобы он был доступен во всем блоке try
       try {
         const modelName = this.modelsToTry[this.currentModelIndex];
+
+        if (!modelName) {
+          console.warn('⚠️ modelName is undefined, resetting index to 0');
+          this.currentModelIndex = 0;
+          continue;
+        }
+
         console.log(`🎨 Генерирую изображение через модель: ${modelName}`);
         console.log(`   Промпт: "${prompt}"`);
 
@@ -148,7 +157,7 @@ class ImageService {
             }
           });
 
-          const response = await result.response;
+          response = await result.response;
           if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
             for (const part of response.candidates[0].content.parts) {
               if (part.inlineData && part.inlineData.data) {
@@ -161,10 +170,10 @@ class ImageService {
 
         if (!imageBuffer) {
           console.error(`❌ Модель ${this.modelsToTry[this.currentModelIndex]} не вернула изображение`);
-          if (response.candidates && response.candidates[0] && response.candidates[0].content) {
+          if (response && response.candidates && response.candidates[0] && response.candidates[0].content) {
             console.error('Response content:', JSON.stringify(response.candidates[0].content, null, 2));
           }
-          if (response.promptFeedback) {
+          if (response && response.promptFeedback) {
             console.error('Prompt feedback:', JSON.stringify(response.promptFeedback, null, 2));
           }
           throw new Error('Модель вернула пустой результат');
