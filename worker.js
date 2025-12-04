@@ -47,16 +47,19 @@ const worker = new Worker('image-generation', async job => {
             const result = await imageService.generateImage(prompt);
 
             // Списываем кредиты (фиксированная цена)
+            console.log('💳 Updating credits...');
             const creditsCost = 2; // PRICES.IMAGE_GEN
             await userQueries.updateCredits(-creditsCost, userId);
 
             // Сохраняем в БД
+            console.log('💾 Saving to DB...');
             const base64Image = result.imageBuffer.toString('base64');
             await generationQueries.create(userId, prompt, '[Изображение]', creditsCost, 'image', base64Image);
             await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Генерация изображения');
             await userQueries.incrementGenerations(creditsCost, userId);
 
             // Отправляем пользователю
+            console.log('📤 Sending photo to Telegram...');
             await bot.sendPhoto(chatId, result.imageBuffer, {
                 caption: `✨ Готово! (потрачено ${creditsCost} кр.)`,
                 reply_to_message_id: messageId
@@ -64,6 +67,7 @@ const worker = new Worker('image-generation', async job => {
                 filename: 'image.png',
                 contentType: 'image/png'
             });
+            console.log('✅ Photo sent');
 
             // Удаляем сообщение "Рисую..."
             if (statusMessageId) {
@@ -111,16 +115,19 @@ const worker = new Worker('image-generation', async job => {
             const result = await imageService.editImage(imageBuffers, prompt);
 
             // 4. Списываем кредиты
+            console.log('💳 Updating credits...');
             const creditsCost = 2; // PRICES.IMAGE_EDIT
             await userQueries.updateCredits(-creditsCost, userId);
 
             // 5. Сохраняем в БД
+            console.log('💾 Saving to DB...');
             const base64Image = result.imageBuffer.toString('base64');
             await generationQueries.create(userId, `[Редактирование] ${prompt}`, '[Изображение]', creditsCost, 'image_edit', base64Image);
             await transactionQueries.create(userId, 'generation', -creditsCost, 0, 'Редактирование изображения');
             await userQueries.incrementGenerations(creditsCost, userId);
 
             // 6. Отправляем результат
+            console.log('📤 Sending photo to Telegram...');
             await bot.sendPhoto(chatId, result.imageBuffer, {
                 caption: `✏️ Готово! (потрачено ${creditsCost} кр.)`,
                 reply_to_message_id: messageId
@@ -128,6 +135,7 @@ const worker = new Worker('image-generation', async job => {
                 filename: 'edited_image.png',
                 contentType: 'image/png'
             });
+            console.log('✅ Photo sent');
 
             // Удаляем сообщение "Рисую..."
             if (statusMessageId) {
