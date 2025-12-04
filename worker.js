@@ -158,15 +158,6 @@ const worker = new Worker('image-generation', async job => {
             throw error;
         }
 
-        // Уведомляем об ошибке (если это не рейт-лимит)
-        try {
-            await bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
-                reply_to_message_id: messageId
-            });
-        } catch (sendError) {
-            console.error('Failed to send error notification:', sendError.message);
-        }
-
         // Удаляем сообщение "Рисую..." даже при ошибке
         if (statusMessageId) {
             try {
@@ -174,6 +165,33 @@ const worker = new Worker('image-generation', async job => {
             } catch (e) {
                 console.error('Failed to delete status message on error:', e.message);
             }
+        }
+
+        // Определяем понятное сообщение для пользователя
+        let userMessage = '❌ Не удалось обработать запрос.';
+
+        if (error.message.includes('Модель вернула пустой результат')) {
+            userMessage = '❌ Gemini 3 Pro Image не смог сгенерировать изображение по этому промпту.\n\n💡 Попробуйте упростить описание или изменить формулировку.';
+        } else if (error.message.includes('API key')) {
+            userMessage = '❌ Ошибка API ключа. Обратитесь к администратору.';
+        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+            userMessage = '❌ Превышен лимит запросов API.\n\n⏳ Попробуйте через несколько минут.';
+        } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+            userMessage = '❌ Превышено время ожидания ответа от API.\n\n⏳ Попробуйте еще раз.';
+        } else if (error.message.includes('Недостаточно кредитов')) {
+            userMessage = '❌ Недостаточно кредитов для выполнения операции.\n\n💰 Используйте /buy для пополнения.';
+        } else {
+            // Для других ошибок показываем техническую информацию
+            userMessage = `❌ Ошибка при обработке запроса:\n${error.message}`;
+        }
+
+        // Уведомляем об ошибке (если это не рейт-лимит)
+        try {
+            await bot.sendMessage(chatId, userMessage, {
+                reply_to_message_id: messageId
+            });
+        } catch (sendError) {
+            console.error('Failed to send error notification:', sendError.message);
         }
 
         throw error;
