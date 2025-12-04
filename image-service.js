@@ -3,23 +3,21 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Модели для генерации изображений (приоритет: работающие → Gemini 3)
-    // Пользователь запросил использовать только Imagen 4
+    // Модели для генерации изображений (приоритет: Gemini 3 Pro Image)
     this.modelsToTry = [
-      'imagen-4.0-generate-001',          // Imagen 4 (Latest)
-      'imagen-4.0-ultra-generate-001'     // Imagen 4 Ultra
+      'gemini-3-pro-image-preview',      // Primary (User requested)
+      'imagen-4.0-generate-001',          // Fallback
+      'imagen-4.0-ultra-generate-001'     // Fallback
     ];
 
     // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
-    // Imagen 4 поддерживает image input через predict
     this.editingModels = [
-      'imagen-4.0-generate-preview-06-06', // Imagen 4 (Supports predict) - Moved to top
-      'gemini-2.5-flash-image',            // User confirmed working model!
-      'gemini-3-pro-preview',              // User suggested
-      'gemini-2.5-pro',                    // User suggested
-      'gemini-2.5-flash-image-preview',    // Experimental
-      'gemini-2.0-flash-exp-image-generation', // Experimental
-      'gemini-2.0-flash-exp'               // Fallback
+      'gemini-3-pro-image-preview',        // Primary (User requested)
+      'gemini-2.5-flash-image',            // Fallback
+      'gemini-2.5-pro',
+      'gemini-2.5-flash-image-preview',
+      'gemini-2.0-flash-exp-image-generation',
+      'gemini-2.0-flash-exp'
     ];
 
     this.currentModelIndex = 0;
