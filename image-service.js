@@ -3,22 +3,9 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 class ImageService {
   constructor(apiKey) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    // Модели для генерации изображений (приоритет: Gemini 3 Pro Image)
-    this.modelsToTry = [
-      'gemini-3-pro-image-preview',      // Primary (User requested)
-      'imagen-4.0-generate-001',          // Fallback
-      'imagen-4.0-ultra-generate-001'     // Fallback
-    ];
-
-    // Модели специально для РЕДАКТИРОВАНИЯ (Image-to-Image)
-    this.editingModels = [
-      'gemini-3-pro-image-preview',        // Primary (User requested)
-      'gemini-2.5-flash-image',            // Fallback
-      'gemini-2.5-pro',
-      'gemini-2.5-flash-image-preview',
-      'gemini-2.0-flash-exp-image-generation',
-      'gemini-2.0-flash-exp'
-    ];
+    // Используем только Gemini 3 Pro Image (по требованию пользователя)
+    this.modelsToTry = ['gemini-3-pro-image-preview'];
+    this.editingModels = ['gemini-3-pro-image-preview'];
 
     this.currentModelIndex = 0;
     this.currentEditModelIndex = 0; // Separate index for editing
@@ -149,9 +136,10 @@ class ImageService {
           }
         } else {
           // Стандартный метод для Gemini моделей
+          // Gemini 3 Pro Image всегда возвращает TEXT + IMAGE
           const result = await this.imageModel.generateContent(prompt, {
             generationConfig: {
-              response_modalities: ['IMAGE']
+              responseModalities: ['TEXT', 'IMAGE']
             }
           });
 
