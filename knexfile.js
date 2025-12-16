@@ -24,7 +24,10 @@ module.exports = {
     },
     production: {
         client: 'pg',
-        connection: process.env.DATABASE_URL,
+        connection: {
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+        },
         migrations: {
             directory: './migrations'
         },
@@ -32,11 +35,13 @@ module.exports = {
             directory: './seeds'
         },
         pool: {
-            min: 2,
-            max: 20,
-            acquireTimeoutMillis: 60000,
+            min: 0, // Allow startup without immediate connection
+            max: 10, // Reduced to avoid overwhelming DB after incident
+            acquireTimeoutMillis: 30000, // 30 seconds to acquire
+            createTimeoutMillis: 30000, // 30 seconds to create
+            idleTimeoutMillis: 30000, // Close idle connections after 30s
+            reapIntervalMillis: 1000, // Check for idle connections every 1s
             propagateCreateError: false
-        },
-        ssl: { rejectUnauthorized: false }
+        }
     }
 };

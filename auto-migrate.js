@@ -18,9 +18,11 @@ console.log('✅ DATABASE_URL found - proceeding with migration');
 // Create knex instance with SSL for Railway
 const knex = require('knex')({
     client: 'pg',
-    connection: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    pool: { min: 0, max: 1 }
+    connection: {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+    },
+    pool: { min: 0, max: 1, acquireTimeoutMillis: 30000 }
 });
 
 const dbPath = path.join(__dirname, 'nano_banana.db');
