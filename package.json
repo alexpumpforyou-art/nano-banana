@@ -4,7 +4,7 @@
   "description": "Nano Banana - Gemini AI integration with Telegram Bot and Web interface",
   "main": "server.js",
   "scripts": {
-    "start": "npx knex migrate:latest && node auto-migrate.js && node server.js",
+    "start": "node safe-migrate.js && node server.js",
     "worker": "node worker.js",
     "dev": "nodemon server.js",
     "lint": "eslint ."
