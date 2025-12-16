@@ -649,9 +649,9 @@ app.post('/api/admin/broadcast', requireAdmin, async (req, res) => {
         await telegramBot.sendMessage(chatId, message);
         results.sent++;
 
-        // Небольшая задержка между сообщениями
+        // Задержка между сообщениями (100ms - безопаснее для больших рассылок)
         if (i < users.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (error) {
         results.failed++;

@@ -8,9 +8,13 @@ const { userQueries, transactionQueries, generationQueries } = require('./databa
 const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
     connectTimeout: 30000, // 30 секунд
-    family: 6, // Force IPv6 for Railway internal network
+    family: 0, // Auto-detect (prefer IPv6, fallback to IPv4)
     retryStrategy: function (times) {
-        return Math.min(times * 100, 3000);
+        // Exponential backoff with jitter to prevent thundering herd
+        const delay = Math.min(times * 200, 10000);
+        const jitter = Math.random() * 500;
+        console.log(`🔄 [Worker] Redis reconnecting in ${Math.round(delay + jitter)}ms (attempt ${times})`);
+        return delay + jitter;
     }
 });
 
@@ -18,15 +22,8 @@ const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', 
 const redisHost = (process.env.REDIS_URL || '').split('@')[1] || 'localhost';
 console.log(`🔍 [Worker] Попытка подключения к Redis: ${redisHost}`);
 
-connection.on('connect', async () => {
+connection.on('connect', () => {
     console.log('✅ [Worker] Redis connected');
-    try {
-        console.log('🧹 Очистка очереди...');
-        await connection.flushall();
-        console.log('✨ Redis полностью очищен!');
-    } catch (e) {
-        console.error('Ошибка очистки:', e);
-    }
 });
 
 connection.on('error', (err) => console.error('❌ [Worker] Redis error:', err.message));

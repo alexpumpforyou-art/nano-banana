@@ -4,9 +4,15 @@ const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const redis = new Redis(redisUrl, {
     connectTimeout: 30000,
     lazyConnect: true,
-    family: 6, // Force IPv6 for Railway internal network
+    family: 0, // Auto-detect (prefer IPv6, fallback to IPv4)
+    enableOfflineQueue: true, // Buffer commands during disconnect
+    maxRetriesPerRequest: 3, // Limit retries for individual requests
     retryStrategy: function (times) {
-        return Math.min(times * 100, 3000);
+        // Exponential backoff with jitter to prevent thundering herd
+        const delay = Math.min(times * 200, 10000);
+        const jitter = Math.random() * 500;
+        console.log(`🔄 [Session] Redis reconnecting in ${Math.round(delay + jitter)}ms (attempt ${times})`);
+        return delay + jitter;
     }
 });
 
