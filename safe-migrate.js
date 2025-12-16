@@ -18,6 +18,12 @@ async function runMigrations() {
         return true;
     }
 
+    // Log connection info (without password)
+    const dbUrl = process.env.DATABASE_URL;
+    const hostMatch = dbUrl.match(/@([^:\/]+)/);
+    const host = hostMatch ? hostMatch[1] : 'unknown';
+    console.log(`🔍 DATABASE_URL host: ${host}`);
+
     const knex = require('knex')({
         client: 'pg',
         connection: {
