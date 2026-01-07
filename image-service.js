@@ -1,25 +1,63 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class ImageService {
-  constructor(apiKey) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
+  constructor(apiKeys) {
+    // Support single key (string) or array of keys
+    this.apiKeys = Array.isArray(apiKeys) ? apiKeys : [apiKeys];
+    // Filter out empty keys
+    this.apiKeys = this.apiKeys.filter(k => k && k.trim().length > 0);
+
+    if (this.apiKeys.length === 0) {
+      throw new Error('No valid API keys provided to ImageService');
+    }
+
+    this.currentKeyIndex = 0;
+
     // Используем только Gemini 3 Pro Image (по требованию пользователя)
     this.modelsToTry = ['gemini-3-pro-image-preview'];
     this.editingModels = ['gemini-3-pro-image-preview'];
 
     this.currentModelIndex = 0;
-    this.currentEditModelIndex = 0; // Separate index for editing
+    this.currentEditModelIndex = 0;
 
-    this.imageModel = this.genAI.getGenerativeModel({
-      model: this.modelsToTry[this.currentModelIndex]
-    });
+    this._initGenAI();
+  }
+
+  _initGenAI() {
+    const key = this.apiKeys[this.currentKeyIndex];
+    // Mask key for logging
+    const maskedKey = key.substring(0, 4) + '...' + key.substring(key.length - 4);
+    console.log(`🔑 [ImageService] Using API Key index: ${this.currentKeyIndex} (${maskedKey})`);
+
+    this.genAI = new GoogleGenerativeAI(key);
+
+    // Re-init default image model
+    if (this.modelsToTry) {
+      this.imageModel = this.genAI.getGenerativeModel({
+        model: this.modelsToTry[this.currentModelIndex || 0]
+      });
+    }
+  }
+
+  rotateKey() {
+    if (this.apiKeys.length <= 1) return false;
+
+    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+    console.log(`🔄 [ImageService] Rotating to API Key index: ${this.currentKeyIndex}`);
+    this._initGenAI();
+    return true;
   }
 
   /**
    * Helper to handle 429 Rate Limit errors with exponential backoff
    */
-  async _generateContentWithRetry(model, params, retries = 3, delay = 2000) {
+  /**
+   * Helper to handle 429 Rate Limit errors with exponential backoff and key rotation
+   */
+  async _generateContentWithRetry(modelName, params, retries = 3, delay = 2000) {
     try {
+      // Get fresh model instance (important if key rotated)
+      const model = this.genAI.getGenerativeModel({ model: modelName });
       return await model.generateContent(params);
     } catch (error) {
       const isRateLimit = error.message.includes('429') ||
@@ -27,10 +65,21 @@ class ImageService {
         error.message.includes('quota') ||
         error.message.includes('limit');
 
-      if (retries > 0 && isRateLimit) {
-        console.warn(`⚠️ Quota exceeded (429). Retrying in ${delay / 1000}s... (${retries} retries left)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this._generateContentWithRetry(model, params, retries - 1, delay * 2);
+      if (isRateLimit) {
+        console.warn(`⚠️ Quota exceeded (429) on key ${this.currentKeyIndex}.`);
+
+        // Try rotating key first
+        if (this.rotateKey()) {
+          console.log('🔄 Retrying immediately with new key...');
+          return this._generateContentWithRetry(modelName, params, retries, delay);
+        }
+
+        // If no more keys or rotation complete/failed, try backoff
+        if (retries > 0) {
+          console.warn(`⏳ Retrying in ${delay / 1000}s... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this._generateContentWithRetry(modelName, params, retries - 1, delay * 2);
+        }
       }
       throw error;
     }
@@ -158,7 +207,8 @@ class ImageService {
         } else {
           // Стандартный метод для Gemini моделей
           // Gemini 3 Pro Image всегда возвращает TEXT + IMAGE
-          const result = await this._generateContentWithRetry(this.imageModel, {
+          // Pass model name string, not object
+          const result = await this._generateContentWithRetry(this.modelsToTry[this.currentModelIndex], {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
               responseModalities: ['TEXT', 'IMAGE']
@@ -278,10 +328,9 @@ class ImageService {
           contentParts.push({ text: editPrompt });
 
           // Используем Gemini модель для редактирования
-          const editModel = this.genAI.getGenerativeModel({ model: modelName });
 
-          // Используем wrapper с retry
-          const result = await this._generateContentWithRetry(editModel, {
+          // Используем wrapper с retry, передаем имя модели
+          const result = await this._generateContentWithRetry(modelName, {
             contents: [{ role: 'user', parts: contentParts }],
             safetySettings: [
               { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },

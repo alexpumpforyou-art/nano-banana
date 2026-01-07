@@ -29,7 +29,10 @@ connection.on('connect', () => {
 connection.on('error', (err) => console.error('❌ [Worker] Redis error:', err.message));
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
-const imageService = new ImageService(process.env.GEMINI_API_KEY);
+const apiKeys = process.env.GEMINI_API_KEYS
+    ? process.env.GEMINI_API_KEYS.split(',').map(k => k.trim())
+    : process.env.GEMINI_API_KEY;
+const imageService = new ImageService(apiKeys);
 
 console.log('🚀 Worker started. Waiting for jobs...');
 

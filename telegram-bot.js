@@ -31,7 +31,10 @@ bot.deleteWebHook().then(() => {
 });
 const gemini = new GeminiService(process.env.GEMINI_API_KEY);
 const yookassa = new YookassaService(process.env.YOOKASSA_SHOP_ID, process.env.YOOKASSA_SECRET_KEY);
-const imageService = new ImageService(process.env.GEMINI_API_KEY);
+const apiKeys = process.env.GEMINI_API_KEYS
+  ? process.env.GEMINI_API_KEYS.split(',').map(k => k.trim())
+  : process.env.GEMINI_API_KEY;
+const imageService = new ImageService(apiKeys);
 
 // Новая система кредитов (деноминация: 1 кредит = 1 текст, 2 кредита = 1 картинка)
 const FREE_CREDITS = parseInt(process.env.FREE_CREDITS) || 5;
