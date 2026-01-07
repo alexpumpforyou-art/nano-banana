@@ -16,6 +16,27 @@ class ImageService {
   }
 
   /**
+   * Helper to handle 429 Rate Limit errors with exponential backoff
+   */
+  async _generateContentWithRetry(model, params, retries = 3, delay = 2000) {
+    try {
+      return await model.generateContent(params);
+    } catch (error) {
+      const isRateLimit = error.message.includes('429') ||
+        error.message.includes('Too Many Requests') ||
+        error.message.includes('quota') ||
+        error.message.includes('limit');
+
+      if (retries > 0 && isRateLimit) {
+        console.warn(`⚠️ Quota exceeded (429). Retrying in ${delay / 1000}s... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this._generateContentWithRetry(model, params, retries - 1, delay * 2);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Редактирование изображения через REST API (для Imagen)
    */
   async editImageViaRest(modelName, imageBuffer, prompt) {
@@ -137,7 +158,8 @@ class ImageService {
         } else {
           // Стандартный метод для Gemini моделей
           // Gemini 3 Pro Image всегда возвращает TEXT + IMAGE
-          const result = await this.imageModel.generateContent(prompt, {
+          const result = await this._generateContentWithRetry(this.imageModel, {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
               responseModalities: ['TEXT', 'IMAGE']
             }
@@ -258,7 +280,9 @@ class ImageService {
           // Используем Gemini модель для редактирования
           const editModel = this.genAI.getGenerativeModel({ model: modelName });
 
-          const result = await editModel.generateContent(contentParts, {
+          // Используем wrapper с retry
+          const result = await this._generateContentWithRetry(editModel, {
+            contents: [{ role: 'user', parts: contentParts }],
             safetySettings: [
               { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
               { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
